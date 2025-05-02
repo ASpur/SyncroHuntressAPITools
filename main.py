@@ -15,11 +15,11 @@ def initSettingsData():
 
     if not os.path.exists("settings.json"):
         print( "Settings file does not exist...\nCreating template file")
-        with open("settings.json", "w") as file:
-            file.write(json.dumps(settings,indent=4))
+        with open("settings.json", "w") as f:
+            f.write(json.dumps(settings,indent=4))
 
-    with open("settings.json","r") as file:
-        jsonData = json.loads(file.read())
+    with open("settings.json","r") as f:
+        jsonData = json.loads(f.read())
 
     for key, value in jsonData.items():
         settings[key] = jsonData[key]
@@ -33,10 +33,9 @@ def initSettingsData():
         print("settings file is missing data, exiting...")
         exit(1)
     return settings
-settings = initSettingsData()
 
 
-def syncroRequest(endpoint, paths = []) -> Response:
+def syncroRequest(settings, endpoint, paths = []) -> Response:
     request = "https://"+settings["SyncroSubDomain"]+".syncromsp.com/api/v1/"
     request += endpoint
     request += "?api_key=" + settings["SyncroAPIKey"]
@@ -47,33 +46,33 @@ def syncroRequest(endpoint, paths = []) -> Response:
     response = requests.get(request, headers={"Accept": "application/json"})
     return response
 
-def getSyncroTickets(page = 1, openOnly = False):
+def getSyncroTickets(settings, page = 1, openOnly = False):
     paths = ["page=" + str(page)]
 
     if openOnly:
         paths.append("status=Not%20Closed")
 
-    responseContent = syncroRequest("tickets",paths).content
+    responseContent = syncroRequest(settings, "tickets",paths).content
     tickets = json.loads(responseContent)["tickets"]
     return tickets
 
-def getSyncroAssets(page=1):
+def getSyncroAssets(settings, page=1):
     paths = ["page=" + str(page)]
 
-    responseContent = syncroRequest("customer_assets",paths).content
+    responseContent = syncroRequest(settings, "customer_assets",paths).content
     assets = json.loads(responseContent)["assets"]
     return assets
 
-def getAllSyncroAssets(maxPages=50):
+def getAllSyncroAssets(settings, maxPages=50):
     assets = []
     for i in range(1,maxPages):
-        newAssets = getSyncroAssets(i)
+        newAssets = getSyncroAssets(settings, i)
         if(len(newAssets) <= 0):
             break
         assets += newAssets
     return assets
 
-def getHuntressAgents(page = 1, limit=500):
+def getHuntressAgents(settings, page = 1, limit=500):
     authBytes = bytes(settings["HuntressAPIKey"]+":"+settings["huntressApiSecretKey"],'utf-8')
     auth = base64.b64encode(authBytes)
     auth = auth.decode('utf-8')
@@ -83,9 +82,9 @@ def getHuntressAgents(page = 1, limit=500):
     response = requests.get(request,headers=headers)
     return response.json()["agents"]
 
-def compareAgents():
-    huntressAgents = getHuntressAgents()
-    syncroAssets = getAllSyncroAssets()
+def compareAgents(settings):
+    huntressAgents = getHuntressAgents(settings)
+    syncroAssets = getAllSyncroAssets(settings)
 
     for sa in syncroAssets:
         saName = sa["properties"]["device_name"].lower()
@@ -107,4 +106,9 @@ def compareAgents():
         if(not found):
             print(haName + " has no match in Syncro")
 
-compareAgents()
+def main():
+    settings = initSettingsData()
+    compareAgents(settings)
+
+if __name__ == "__main__":
+    main()
