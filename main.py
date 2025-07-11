@@ -12,6 +12,7 @@ def initSettingsData():
     settings["SyncroSubDomain"] = ""
     settings["HuntressAPIKey"] = ""
     settings["huntressApiSecretKey"] = ""
+    settings["debug"] = False
 
     if not os.path.exists("settings.json"):
         print( "Settings file does not exist...\nCreating template file")
@@ -86,10 +87,16 @@ def compareAgents(settings):
     huntressAgents = getHuntressAgents(settings)
     syncroAssets = getAllSyncroAssets(settings)
 
+    if(settings["debug"] == True):
+        with open("debug/agentDumpSyncro.json", "w") as f:
+            f.write(json.dumps(syncroAssets,indent=4))
+        with open("debug/agentDumpHuntress.json", "w") as f:
+            f.write(json.dumps(huntressAgents,indent=4))
+
     for sa in syncroAssets:
-        if(not sa["properties"]["device_name"]):
+        if(not sa["name"]):
             continue
-        saName = sa["properties"]["device_name"].lower()
+        saName = sa["name"].lower()
         found = False
         for ha in huntressAgents:
             #only checking first 15 characters because syncro cuts the name off at 15
@@ -102,9 +109,9 @@ def compareAgents(settings):
         haName = ha["hostname"][:15]
         found = False
         for sa in syncroAssets:
-            if(not sa["properties"]["device_name"]):
+            if(not sa["name"]):
                 continue
-            if(sa["properties"]["device_name"].lower() == haName.lower()):
+            if(sa["name"].lower() == haName.lower()):
                 found = True
                 break
         if(not found):
