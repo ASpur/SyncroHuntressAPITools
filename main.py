@@ -87,6 +87,8 @@ def compareAgents(settings):
     syncroAssets = getAllSyncroAssets(settings)
 
     for sa in syncroAssets:
+        if(not sa["properties"]["device_name"]):
+            continue
         saName = sa["properties"]["device_name"].lower()
         found = False
         for ha in huntressAgents:
@@ -100,6 +102,8 @@ def compareAgents(settings):
         haName = ha["hostname"][:15]
         found = False
         for sa in syncroAssets:
+            if(not sa["properties"]["device_name"]):
+                continue
             if(sa["properties"]["device_name"].lower() == haName.lower()):
                 found = True
                 break
