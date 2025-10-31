@@ -91,8 +91,7 @@ def getHuntressAgents(settings, page = 1, limit=500):
     response = requests.get(request,headers=headers)
     return response.json()["agents"]
 
-def compareAgents(settings, output_file: Optional[str] = None, use_color: bool = True):
-    huntressAgents = getHuntressAgents(settings)
+def compareAgents(settings, output_file: Optional[str] = None, use_color: bool = True, output_format: str = "console"):
     huntressAgents = getHuntressAgents(settings)
     syncroAssets = getAllSyncroAssets(settings)
 
@@ -143,18 +142,37 @@ def compareAgents(settings, output_file: Optional[str] = None, use_color: bool =
     # sort so OK! rows come first, errors (missing) at the bottom; then alphabetical
     rows.sort(key=lambda r: (0 if r[2] == "OK!" else 1, r[0].lower(), r[1].lower()))
 
-    # Optionally write CSV
+    # compute column widths
+    col1w = max([len(r[0]) for r in rows] + [len("Syncro Asset")])
+    col2w = max([len(r[1]) for r in rows] + [len("Huntress Asset")])
+    col3w = max([len(r[2]) for r in rows] + [len("Status")])
+
+    # Optionally write to file
     if output_file:
         try:
-            with open(output_file, "w", newline="", encoding="utf-8") as csvf:
-                writer = csv.writer(csvf)
-                writer.writerow(["Syncro Asset", "Huntress Asset", "Status"])
-                for r in rows:
-                    writer.writerow(r)
+            if output_format == "csv":
+                with open(output_file, "w", newline="", encoding="utf-8") as csvf:
+                    writer = csv.writer(csvf)
+                    writer.writerow(["Syncro Asset", "Huntress Asset", "Status"])
+                    for r in rows:
+                        writer.writerow(r)
+            elif output_format == "ascii":
+                with open(output_file, "w", encoding="utf-8") as f:
+                    # Top border
+                    f.write("+" + "-" * (col1w + 2) + "+" + "-" * (col2w + 2) + "+" + "-" * (col3w + 2) + "+\n")
+                    # Header
+                    f.write(f"| {'Syncro Asset'.ljust(col1w)} | {'Huntress Asset'.ljust(col2w)} | {'Status'.ljust(col3w)} |\n")
+                    # Header separator
+                    f.write("+" + "=" * (col1w + 2) + "+" + "=" * (col2w + 2) + "+" + "=" * (col3w + 2) + "+\n")
+                    # Data rows
+                    for s, h, status in rows:
+                        f.write(f"| {s.ljust(col1w)} | {h.ljust(col2w)} | {status.ljust(col3w)} |\n")
+                    # Bottom border
+                    f.write("+" + "-" * (col1w + 2) + "+" + "-" * (col2w + 2) + "+" + "-" * (col3w + 2) + "+\n")
         except Exception as e:
-            print(f"Failed to write CSV {output_file}: {e}")
+            print(f"Failed to write {output_format.upper()} {output_file}: {e}")
 
-    # Print table with color
+    # Print table with color to console
     use_color = use_color and COLORAMA_AVAILABLE
     if use_color:
         GREEN = colorama.Fore.GREEN
@@ -163,11 +181,6 @@ def compareAgents(settings, output_file: Optional[str] = None, use_color: bool =
         RESET = colorama.Style.RESET_ALL
     else:
         GREEN = YELLOW = RED = RESET = ""
-
-    # compute column widths
-    col1w = max([len(r[0]) for r in rows] + [len("Syncro Asset")])
-    col2w = max([len(r[1]) for r in rows] + [len("Huntress Asset")])
-    col3w = max([len(r[2]) for r in rows] + [len("Status")])
 
     header = f"{'Syncro Asset'.ljust(col1w)}  {'Huntress Asset'.ljust(col2w)}  {'Status'.ljust(col3w)}"
     print(header)
@@ -183,16 +196,67 @@ def compareAgents(settings, output_file: Optional[str] = None, use_color: bool =
 
 def main():
     settings = initSettingsData()
-    output_file = None
-    use_color = True
-    if "-o" in sys.argv:
-        idx = sys.argv.index("-o")
-        if idx + 1 < len(sys.argv):
-            output_file = sys.argv[idx + 1]
-    if "--no-color" in sys.argv:
-        use_color = False
-    # run compare with optional output file and color flag
-    compareAgents(settings, output_file=output_file, use_color=use_color)
+    
+    args = parse_arguments()
+    
+    if args.get('compare'):
+        compareAgents(settings, 
+                     output_file=args.get('output'), 
+                     use_color=args.get('color', True),
+                     output_format=args.get('format', 'console'))
+    else:
+        print("Usage: python main.py [command] [options]")
+        print("Commands:")
+        print("  -c, --compare           Compare Syncro and Huntress agents")
+        print("Options:")
+        print("  -o, --output FILE       Output results to file")
+        print("  -f, --format FORMAT     Output format: csv or ascii (default: csv)")
+        print("  --no-color             Disable colored output")
+
+def parse_arguments():
+    """Parse command line arguments and return a dictionary of options"""
+    args = {}
+    i = 1
+    
+    while i < len(sys.argv):
+        arg = sys.argv[i]
+        
+        if arg in ['-c', '--compare']:
+            args['compare'] = True
+        elif arg in ['-o', '--output']:
+            if i + 1 < len(sys.argv):
+                args['output'] = sys.argv[i + 1]
+                i += 1
+            else:
+                print("Error: -o/--output requires a filename")
+                sys.exit(1)
+        elif arg in ['-f', '--format']:
+            if i + 1 < len(sys.argv):
+                fmt = sys.argv[i + 1].lower()
+                if fmt in ['csv', 'ascii']:
+                    args['format'] = fmt
+                    i += 1  # This line was missing!
+                else:
+                    print("Error: format must be 'csv' or 'ascii'")
+                    sys.exit(1)
+            else:
+                print("Error: -f/--format requires a format type (csv or ascii)")
+                sys.exit(1)
+        elif arg == '--no-color':
+            args['color'] = False
+        else:
+            print(f"Unknown argument: {arg}")
+            sys.exit(1)
+        
+        i += 1
+    
+    # Set defaults
+    if 'color' not in args:
+        args['color'] = True
+    if 'format' not in args:
+        args['format'] = 'csv'
+    
+    return args
 
 if __name__ == "__main__":
     main()
