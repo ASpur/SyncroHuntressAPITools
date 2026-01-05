@@ -1,8 +1,8 @@
 import requests
 from requests.models import Response
-from typing import Dict, List
+from typing import Dict, List, Optional
 
-def _make_request(settings: Dict, endpoint: str, paths: List[str] = None) -> Response:
+def _make_request(settings: Dict, endpoint: str, paths: Optional[List[str]] = None) -> Response:
     """Make a request to the Syncro API"""
     if paths is None:
         paths = []
