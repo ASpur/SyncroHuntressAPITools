@@ -1,0 +1,7 @@
+requests>=2.28.0
+colorama>=0.4.6
+Pygments>=2.15.0
+
+# Development dependencies
+pytest>=7.0.0
+responses>=0.23.0
