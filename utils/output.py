@@ -8,57 +8,66 @@ try:
 except ImportError:
     COLORAMA_AVAILABLE = False
 
+# Constants
+HEADERS = ("Syncro Asset", "Huntress Asset", "Status")
+STATUS_OK = "OK!"
+
+
+def _calculate_column_widths(rows: List[Tuple[str, str, str]]) -> List[int]:
+    """Calculate the width needed for each column based on content."""
+    return [
+        max(len(header), max((len(row[i]) for row in rows), default=0))
+        for i, header in enumerate(HEADERS)
+    ]
+
+
+def _make_border(widths: List[int], fill_char: str = "-") -> str:
+    """Generate a table border line like +----+----+----+"""
+    return "+" + "+".join(fill_char * (w + 2) for w in widths) + "+"
+
+
 def write_csv(filename: str, rows: List[Tuple[str, str, str]]) -> None:
-    """Write results to CSV file"""
+    """Write results to CSV file."""
     with open(filename, "w", newline="", encoding="utf-8") as csvf:
         writer = csv.writer(csvf)
-        writer.writerow(["Syncro Asset", "Huntress Asset", "Status"])
+        writer.writerow(HEADERS)
         writer.writerows(rows)
 
+
 def write_ascii_table(filename: str, rows: List[Tuple[str, str, str]]) -> None:
-    """Write results to ASCII table file"""
-    col1w = max([len(r[0]) for r in rows] + [len("Syncro Asset")])
-    col2w = max([len(r[1]) for r in rows] + [len("Huntress Asset")])
-    col3w = max([len(r[2]) for r in rows] + [len("Status")])
+    """Write results to ASCII table file."""
+    widths = _calculate_column_widths(rows)
+
+    def format_row(values: Tuple[str, str, str]) -> str:
+        cells = " | ".join(val.ljust(widths[i]) for i, val in enumerate(values))
+        return f"| {cells} |"
 
     with open(filename, "w", encoding="utf-8") as f:
-        # Top border
-        f.write("+" + "-" * (col1w + 2) + "+" + "-" * (col2w + 2) + "+" + "-" * (col3w + 2) + "+\n")
-        # Header
-        f.write(f"| {'Syncro Asset'.ljust(col1w)} | {'Huntress Asset'.ljust(col2w)} | {'Status'.ljust(col3w)} |\n")
-        # Header separator
-        f.write("+" + "=" * (col1w + 2) + "+" + "=" * (col2w + 2) + "+" + "=" * (col3w + 2) + "+\n")
-        # Data rows
-        for s, h, status in rows:
-            f.write(f"| {s.ljust(col1w)} | {h.ljust(col2w)} | {status.ljust(col3w)} |\n")
-        # Bottom border
-        f.write("+" + "-" * (col1w + 2) + "+" + "-" * (col2w + 2) + "+" + "-" * (col3w + 2) + "+\n")
+        f.write(_make_border(widths) + "\n")
+        f.write(format_row(HEADERS) + "\n")
+        f.write(_make_border(widths, "=") + "\n")
+        for row in rows:
+            f.write(format_row(row) + "\n")
+        f.write(_make_border(widths) + "\n")
+
 
 def print_colored_table(rows: List[Tuple[str, str, str]], use_color: bool = True) -> None:
-    """Print colored table to console"""
+    """Print colored table to console."""
     use_color = use_color and COLORAMA_AVAILABLE
-    
+
     if use_color:
         GREEN = colorama.Fore.GREEN
-        YELLOW = colorama.Fore.YELLOW
         RED = colorama.Fore.RED
         RESET = colorama.Style.RESET_ALL
     else:
-        GREEN = YELLOW = RED = RESET = ""
+        GREEN = RED = RESET = ""
 
-    col1w = max([len(r[0]) for r in rows] + [len("Syncro Asset")])
-    col2w = max([len(r[1]) for r in rows] + [len("Huntress Asset")])
-    col3w = max([len(r[2]) for r in rows] + [len("Status")])
+    widths = _calculate_column_widths(rows)
 
-    header = f"{'Syncro Asset'.ljust(col1w)}  {'Huntress Asset'.ljust(col2w)}  {'Status'.ljust(col3w)}"
+    header = "  ".join(h.ljust(widths[i]) for i, h in enumerate(HEADERS))
     print(header)
-    print("-" * (col1w + col2w + col3w + 4))
-    
-    for s, h, status in rows:
-        if status == "OK!":
-            color = GREEN
-        elif status == "Missing in Huntress":
-            color = YELLOW
-        else:
-            color = RED
-        print(f"{s.ljust(col1w)}  {h.ljust(col2w)}  {color}{status.ljust(col3w)}{RESET}")
+    print("-" * (sum(widths) + 4))
+
+    for syncro, huntress, status in rows:
+        color = GREEN if status == STATUS_OK else RED
+        print(f"{syncro.ljust(widths[0])}  {huntress.ljust(widths[1])}  {color}{status.ljust(widths[2])}{RESET}")
