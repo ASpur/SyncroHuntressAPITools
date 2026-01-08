@@ -2,12 +2,18 @@ import requests
 from requests.exceptions import JSONDecodeError
 from requests.models import Response
 from typing import Dict, List, Optional
+from utils.rate_limit import RateLimiter
+
+# Rate limiting: 180 requests per minute = 3 requests per second
+_rate_limiter = RateLimiter(rate=3.0, name="Syncro API")
 
 
 def _make_request(settings: Dict, endpoint: str, paths: Optional[List[str]] = None) -> Response:
     """Make a request to the Syncro API."""
     if paths is None:
         paths = []
+
+    _rate_limiter.acquire()
 
     base_url = f"https://{settings['SyncroSubDomain']}.syncromsp.com/api/v1/"
     request_url = f"{base_url}{endpoint}?api_key={settings['SyncroAPIKey']}"
