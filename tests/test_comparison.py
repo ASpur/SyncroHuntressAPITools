@@ -42,16 +42,18 @@ class TestCompareAgents:
             json={"agents": [{"hostname": "WORKSTATION-001"}]},
             status=200,
         )
+        # First call for metadata
+        responses.add(
+            responses.GET,
+            "https://testcompany.syncromsp.com/api/v1/customer_assets",
+            json={"assets": [{"name": "WORKSTATION-001"}], "meta": {"total_pages": 1}},
+            status=200,
+        )
+        # Second call for actual page fetch
         responses.add(
             responses.GET,
             "https://testcompany.syncromsp.com/api/v1/customer_assets",
             json={"assets": [{"name": "WORKSTATION-001"}]},
-            status=200,
-        )
-        responses.add(
-            responses.GET,
-            "https://testcompany.syncromsp.com/api/v1/customer_assets",
-            json={"assets": []},
             status=200,
         )
 
@@ -73,13 +75,13 @@ class TestCompareAgents:
         responses.add(
             responses.GET,
             "https://testcompany.syncromsp.com/api/v1/customer_assets",
-            json={"assets": [{"name": "ORPHAN-PC"}]},
+            json={"assets": [{"name": "ORPHAN-PC"}], "meta": {"total_pages": 1}},
             status=200,
         )
         responses.add(
             responses.GET,
             "https://testcompany.syncromsp.com/api/v1/customer_assets",
-            json={"assets": []},
+            json={"assets": [{"name": "ORPHAN-PC"}]},
             status=200,
         )
 
@@ -96,6 +98,12 @@ class TestCompareAgents:
             responses.GET,
             "https://api.huntress.io/v1/agents",
             json={"agents": [{"hostname": "GHOST-PC"}]},
+            status=200,
+        )
+        responses.add(
+            responses.GET,
+            "https://testcompany.syncromsp.com/api/v1/customer_assets",
+            json={"assets": [], "meta": {"total_pages": 1}},
             status=200,
         )
         responses.add(
@@ -123,13 +131,13 @@ class TestCompareAgents:
         responses.add(
             responses.GET,
             "https://testcompany.syncromsp.com/api/v1/customer_assets",
-            json={"assets": [{"name": "WORKSTATION-001"}]},
+            json={"assets": [{"name": "WORKSTATION-001"}], "meta": {"total_pages": 1}},
             status=200,
         )
         responses.add(
             responses.GET,
             "https://testcompany.syncromsp.com/api/v1/customer_assets",
-            json={"assets": []},
+            json={"assets": [{"name": "WORKSTATION-001"}]},
             status=200,
         )
 
@@ -153,13 +161,13 @@ class TestCompareAgents:
         responses.add(
             responses.GET,
             "https://testcompany.syncromsp.com/api/v1/customer_assets",
-            json={"assets": [{"name": "PC-001"}]},
+            json={"assets": [{"name": "PC-001"}], "meta": {"total_pages": 1}},
             status=200,
         )
         responses.add(
             responses.GET,
             "https://testcompany.syncromsp.com/api/v1/customer_assets",
-            json={"assets": []},
+            json={"assets": [{"name": "PC-001"}]},
             status=200,
         )
 
@@ -178,6 +186,12 @@ class TestCompareAgents:
             responses.GET,
             "https://api.huntress.io/v1/agents",
             json={"agents": []},
+            status=200,
+        )
+        responses.add(
+            responses.GET,
+            "https://testcompany.syncromsp.com/api/v1/customer_assets",
+            json={"assets": [], "meta": {"total_pages": 1}},
             status=200,
         )
         responses.add(
@@ -210,13 +224,13 @@ class TestCompareAgents:
         responses.add(
             responses.GET,
             "https://testcompany.syncromsp.com/api/v1/customer_assets",
-            json={"assets": [{"name": "Workstation-001"}]},
+            json={"assets": [{"name": "Workstation-001"}], "meta": {"total_pages": 1}},
             status=200,
         )
         responses.add(
             responses.GET,
             "https://testcompany.syncromsp.com/api/v1/customer_assets",
-            json={"assets": []},
+            json={"assets": [{"name": "Workstation-001"}]},
             status=200,
         )
 
@@ -250,13 +264,17 @@ class TestCompareAgents:
                 {"name": ""},
                 {"name": None},
                 {"name": "VALID-PC"},
-            ]},
+            ], "meta": {"total_pages": 1}},
             status=200,
         )
         responses.add(
             responses.GET,
             "https://testcompany.syncromsp.com/api/v1/customer_assets",
-            json={"assets": []},
+            json={"assets": [
+                {"name": ""},
+                {"name": None},
+                {"name": "VALID-PC"},
+            ]},
             status=200,
         )
 

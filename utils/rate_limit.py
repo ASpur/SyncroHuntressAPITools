@@ -8,14 +8,15 @@ class RateLimiter:
 
     Args:
         rate: Maximum requests per second
+        burst: Maximum burst size (defaults to rate, i.e., 1 second worth)
         name: Name to display when rate limited (e.g., "Syncro API")
     """
 
-    def __init__(self, rate: float, name: str = "API"):
+    def __init__(self, rate: float, burst: float | None = None, name: str = "API"):
         self.rate = rate
         self.name = name
-        self.tokens = rate  # Start with full bucket
-        self.max_tokens = rate  # Bucket size = 1 second worth of requests
+        self.max_tokens = burst if burst is not None else rate
+        self.tokens = self.max_tokens  # Start with full bucket
         self.last_refill = time.time()
         self._lock = Lock()
 

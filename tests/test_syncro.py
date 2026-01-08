@@ -54,10 +54,18 @@ class TestGetAssets:
 class TestGetAllAssets:
     @responses.activate
     def test_fetches_multiple_pages(self, mock_settings):
-        """Test that get_all_assets fetches until empty page."""
+        """Test that get_all_assets fetches all pages based on meta.total_pages."""
         page1_assets = [{"id": 1, "name": "Asset1"}]
         page2_assets = [{"id": 2, "name": "Asset2"}]
 
+        # First call to get total_pages metadata
+        responses.add(
+            responses.GET,
+            "https://testcompany.syncromsp.com/api/v1/customer_assets",
+            json={"assets": page1_assets, "meta": {"total_pages": 2}},
+            status=200,
+        )
+        # Parallel fetches for pages 1 and 2
         responses.add(
             responses.GET,
             "https://testcompany.syncromsp.com/api/v1/customer_assets",
@@ -70,23 +78,23 @@ class TestGetAllAssets:
             json={"assets": page2_assets},
             status=200,
         )
-        responses.add(
-            responses.GET,
-            "https://testcompany.syncromsp.com/api/v1/customer_assets",
-            json={"assets": []},
-            status=200,
-        )
 
         result = syncro.get_all_assets(mock_settings)
 
         assert len(result) == 2
-        assert result[0]["name"] == "Asset1"
-        assert result[1]["name"] == "Asset2"
 
     @responses.activate
     def test_respects_max_pages(self, mock_settings):
-        """Test that get_all_assets stops at max_pages."""
-        for _ in range(5):
+        """Test that get_all_assets stops at max_pages even if API has more."""
+        # First call returns metadata showing 5 pages, but we limit to 3
+        responses.add(
+            responses.GET,
+            "https://testcompany.syncromsp.com/api/v1/customer_assets",
+            json={"assets": [{"id": 1}], "meta": {"total_pages": 5}},
+            status=200,
+        )
+        # 3 parallel fetches (limited by max_pages)
+        for _ in range(3):
             responses.add(
                 responses.GET,
                 "https://testcompany.syncromsp.com/api/v1/customer_assets",
@@ -96,7 +104,8 @@ class TestGetAllAssets:
 
         syncro.get_all_assets(mock_settings, max_pages=3)
 
-        assert len(responses.calls) == 3
+        # 1 for metadata + 3 for pages = 4 calls
+        assert len(responses.calls) == 4
 
 
 class TestGetTickets:

@@ -18,10 +18,15 @@ def compare_agents(
     output_format: str = "csv"
 ) -> None:
     """Compare Syncro and Huntress agents"""
-    # Fetch data with loading spinner
+    from concurrent.futures import ThreadPoolExecutor
+
+    # Fetch data from both APIs in parallel
     with Spinner("Fetching agents from APIs"):
-        huntress_agents = huntress.get_agents(settings)
-        syncro_assets = syncro.get_all_assets(settings)
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            huntress_future = executor.submit(huntress.get_agents, settings)
+            syncro_future = executor.submit(syncro.get_all_assets, settings)
+            huntress_agents = huntress_future.result()
+            syncro_assets = syncro_future.result()
 
     # Build maps from normalized -> set(original names)
     syncro_map = {}
