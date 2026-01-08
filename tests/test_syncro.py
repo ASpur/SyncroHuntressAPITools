@@ -201,3 +201,69 @@ class TestSyncroErrorHandling:
         with pytest.raises(ValueError) as exc_info:
             syncro.get_assets(mock_settings)
         assert "json" in str(exc_info.value).lower() or "parse" in str(exc_info.value).lower()
+
+
+class TestSyncroRateLimiting:
+    @responses.activate
+    def test_rate_limiter_allows_burst_within_limit(self, mock_settings):
+        """Test that bursts within rate limit complete quickly (token bucket)."""
+        import time
+        from api.syncro import _rate_limiter
+
+        # Reset the rate limiter to full tokens
+        _rate_limiter.tokens = _rate_limiter.max_tokens
+        _rate_limiter.last_refill = time.time()
+
+        # Add mock responses for 3 requests (within burst limit of 3 tokens)
+        for _ in range(3):
+            responses.add(
+                responses.GET,
+                "https://testcompany.syncromsp.com/api/v1/customer_assets",
+                json={"assets": [{"id": 1, "name": "Asset"}]},
+                status=200,
+            )
+        responses.add(
+            responses.GET,
+            "https://testcompany.syncromsp.com/api/v1/customer_assets",
+            json={"assets": []},
+            status=200,
+        )
+
+        start_time = time.time()
+        syncro.get_all_assets(mock_settings, max_pages=3)
+        elapsed = time.time() - start_time
+
+        # Burst of 3 requests should complete quickly (under 0.5s)
+        assert elapsed < 0.5, f"Burst requests too slow ({elapsed:.2f}s), token bucket may not be working"
+
+    @responses.activate
+    def test_rate_limiter_enforces_limit_when_exhausted(self, mock_settings):
+        """Test that rate limiter waits when tokens exhausted."""
+        import time
+        from api.syncro import _rate_limiter
+
+        # Exhaust the tokens
+        _rate_limiter.tokens = 0
+        _rate_limiter.last_refill = time.time()
+
+        # Add mock responses
+        for _ in range(2):
+            responses.add(
+                responses.GET,
+                "https://testcompany.syncromsp.com/api/v1/customer_assets",
+                json={"assets": [{"id": 1, "name": "Asset"}]},
+                status=200,
+            )
+        responses.add(
+            responses.GET,
+            "https://testcompany.syncromsp.com/api/v1/customer_assets",
+            json={"assets": []},
+            status=200,
+        )
+
+        start_time = time.time()
+        syncro.get_all_assets(mock_settings, max_pages=2)
+        elapsed = time.time() - start_time
+
+        # With 0 tokens, need to wait for refill (~0.33s per token at 3/sec)
+        assert elapsed >= 0.3, f"Requests completed too fast ({elapsed:.2f}s), rate limiting may not be working"
