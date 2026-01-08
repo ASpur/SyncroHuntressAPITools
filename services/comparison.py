@@ -4,7 +4,8 @@ from typing import Dict, List, Tuple, Optional
 from api import syncro, huntress
 from utils.output import write_csv, write_ascii_table, print_colored_table
 
-def normalize(name: str, length: int = 15) -> Optional[str]:
+MAX_NAME_WIDTH = 15
+def normalize(name: str, length: int = MAX_NAME_WIDTH) -> Optional[str]:
     """Normalize asset name for comparison"""
     if not name:
         return None
