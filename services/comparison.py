@@ -2,7 +2,7 @@ import os
 import json
 from typing import Dict, List, Tuple, Optional
 from api import syncro, huntress
-from utils.output import write_csv, write_ascii_table, print_colored_table
+from utils.output import write_csv, write_ascii_table, print_colored_table, Spinner
 
 MAX_NAME_WIDTH = 15
 def normalize(name: str, length: int = MAX_NAME_WIDTH) -> Optional[str]:
@@ -18,9 +18,10 @@ def compare_agents(
     output_format: str = "csv"
 ) -> None:
     """Compare Syncro and Huntress agents"""
-    # Fetch data
-    huntress_agents = huntress.get_agents(settings)
-    syncro_assets = syncro.get_all_assets(settings)
+    # Fetch data with loading spinner
+    with Spinner("Fetching agents from APIs"):
+        huntress_agents = huntress.get_agents(settings)
+        syncro_assets = syncro.get_all_assets(settings)
 
     # Build maps from normalized -> set(original names)
     syncro_map = {}
