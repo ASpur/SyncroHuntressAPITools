@@ -1,4 +1,7 @@
 import csv
+import sys
+import threading
+import time
 from typing import List, Tuple
 
 try:
@@ -7,6 +10,45 @@ try:
     COLORAMA_AVAILABLE = True
 except ImportError:
     COLORAMA_AVAILABLE = False
+
+
+class Spinner:
+    """A loading spinner for long-running operations."""
+
+    FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+
+    def __init__(self, message: str = "Loading"):
+        self.message = message
+        self._stop_event = threading.Event()
+        self._thread = None
+
+    def _spin(self):
+        idx = 0
+        while not self._stop_event.is_set():
+            frame = self.FRAMES[idx % len(self.FRAMES)]
+            sys.stdout.write(f"\r{frame} {self.message}...")
+            sys.stdout.flush()
+            idx += 1
+            time.sleep(0.1)
+        sys.stdout.write("\r" + " " * (len(self.message) + 5) + "\r")
+        sys.stdout.flush()
+
+    def start(self):
+        self._stop_event.clear()
+        self._thread = threading.Thread(target=self._spin)
+        self._thread.start()
+
+    def stop(self):
+        self._stop_event.set()
+        if self._thread:
+            self._thread.join()
+
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, *args):
+        self.stop()
 
 # Constants
 HEADERS = ("Syncro Asset", "Huntress Asset", "Status")
