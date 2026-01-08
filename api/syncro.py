@@ -5,7 +5,8 @@ from typing import Dict, List, Optional
 from utils.rate_limit import RateLimiter
 
 # Rate limiting: 180 requests per minute = 3 requests per second
-_rate_limiter = RateLimiter(rate=3.0, name="Syncro API")
+# Burst of 180 allows all requests in a minute window to fire instantly
+_rate_limiter = RateLimiter(rate=3.0, burst=180.0, name="Syncro API")
 
 
 def _make_request(settings: Dict, endpoint: str, paths: Optional[List[str]] = None) -> Response:
@@ -57,12 +58,35 @@ def get_assets(settings: Dict, page: int = 1) -> List[Dict]:
     return _parse_response(response, "assets")
 
 
+def _get_total_pages(settings: Dict) -> int:
+    """Get total number of asset pages from API metadata."""
+    paths = ["page=1"]
+    response = _make_request(settings, "customer_assets", paths)
+    try:
+        data = response.json()
+        return data.get("meta", {}).get("total_pages", 1)
+    except JSONDecodeError:
+        return 1
+
+
 def get_all_assets(settings: Dict, max_pages: int = 50) -> List[Dict]:
-    """Get all Syncro assets across multiple pages."""
+    """Get all Syncro assets across multiple pages using parallel requests."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    # Get total pages from API metadata
+    total_pages = min(_get_total_pages(settings), max_pages)
+
+    if total_pages <= 1:
+        return get_assets(settings, page=1)
+
+    # Fetch all pages in parallel - rate limiter handles the throttling
     assets = []
-    for page in range(1, max_pages + 1):
-        new_assets = get_assets(settings, page)
-        if not new_assets:
-            break
-        assets.extend(new_assets)
+    with ThreadPoolExecutor(max_workers=total_pages) as executor:
+        futures = {
+            executor.submit(get_assets, settings, page): page
+            for page in range(1, total_pages + 1)
+        }
+        for future in as_completed(futures):
+            assets.extend(future.result())
+
     return assets
