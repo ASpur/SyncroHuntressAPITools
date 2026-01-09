@@ -76,7 +76,12 @@ def write_csv(filename: str, rows: List[Tuple[str, str, str]]) -> None:
         writer.writerows(rows)
 
 
-def write_ascii_table(filename: str, rows: List[Tuple[str, str, str]]) -> None:
+def write_ascii_table(
+    filename: str,
+    rows: List[Tuple[str, str, str]],
+    syncro_count: int = 0,
+    huntress_count: int = 0
+) -> None:
     """Write results to ASCII table file."""
     widths = _calculate_column_widths(rows)
 
@@ -85,6 +90,13 @@ def write_ascii_table(filename: str, rows: List[Tuple[str, str, str]]) -> None:
         return f"| {cells} |"
 
     with open(filename, "w", encoding="utf-8") as f:
+        # Write asset counts summary
+        f.write("Asset Counts\n")
+        f.write(f"  Syncro:   {syncro_count}\n")
+        f.write(f"  Huntress: {huntress_count}\n")
+        f.write("\n")
+
+        # Write comparison table
         f.write(_make_border(widths) + "\n")
         f.write(format_row(HEADERS) + "\n")
         f.write(_make_border(widths, "=") + "\n")
@@ -93,7 +105,12 @@ def write_ascii_table(filename: str, rows: List[Tuple[str, str, str]]) -> None:
         f.write(_make_border(widths) + "\n")
 
 
-def print_colored_table(rows: List[Tuple[str, str, str]], use_color: bool = True) -> None:
+def print_colored_table(
+    rows: List[Tuple[str, str, str]],
+    use_color: bool = True,
+    syncro_count: int = 0,
+    huntress_count: int = 0
+) -> None:
     """Print colored table to console."""
     use_color = use_color and COLORAMA_AVAILABLE
 
@@ -113,3 +130,9 @@ def print_colored_table(rows: List[Tuple[str, str, str]], use_color: bool = True
     for syncro, huntress, status in rows:
         color = GREEN if status == STATUS_OK else RED
         print(f"{syncro.ljust(widths[0])}  {huntress.ljust(widths[1])}  {color}{status.ljust(widths[2])}{RESET}")
+
+    # Print asset counts summary
+    print()
+    print("Asset Counts")
+    print(f"  Syncro:   {syncro_count}")
+    print(f"  Huntress: {huntress_count}")

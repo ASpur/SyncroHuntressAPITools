@@ -74,16 +74,20 @@ def compare_agents(
     # Sort: OK first, errors at bottom, then alphabetical
     rows.sort(key=lambda r: (0 if r[2] == "OK!" else 1, r[0].lower(), r[1].lower()))
 
+    # Calculate asset counts
+    syncro_count = len(syncro_map)
+    huntress_count = len(huntress_map)
+
     # Write to file if requested
     if output_file:
         try:
             if output_format == "csv":
                 write_csv(output_file, rows)
             elif output_format == "ascii":
-                write_ascii_table(output_file, rows)
+                write_ascii_table(output_file, rows, syncro_count, huntress_count)
             print(f"Results written to {output_file}")
         except Exception as e:
             print(f"Failed to write {output_format.upper()} {output_file}: {e}")
 
     # Print to console
-    print_colored_table(rows, use_color)
+    print_colored_table(rows, use_color, syncro_count, huntress_count)
