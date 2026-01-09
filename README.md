@@ -43,7 +43,10 @@ Then edit `settings.json` with your credentials:
 ```
 
 ## Usage
-
+Launch GUI:
+```bash
+python gui.py
+```
 Compare Syncro and Huntress agents:
 ```bash
 python main.py --compare
