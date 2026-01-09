@@ -2,6 +2,9 @@
 
 A CLI tool to compare agents between Syncro and Huntress platforms.
 
+## AI Disclosure
+Portions of this codebase were created or modified with assistance from AI language models. All AI-generated code has been reviewed and tested.
+
 ## Installation
 
 1. Clone the repository:
