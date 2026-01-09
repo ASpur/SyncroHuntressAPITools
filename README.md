@@ -58,7 +58,7 @@ python main.py --compare
 |------|-------------|
 | `-c`, `--compare` | Compare Syncro and Huntress agents |
 | `-o FILE`, `--output FILE` | Output results to a file |
-| `-f FORMAT`, `--format FORMAT` | Output format: `csv` or `ascii` (default: csv) |
+| `-f FORMAT`, `--format FORMAT` | Output file format: `csv` or `ascii` (default: csv) |
 | `--no-color` | Disable colored output |
 
 ### Examples
