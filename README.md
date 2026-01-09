@@ -1,6 +1,6 @@
 # SyncroHuntressAPITools
 
-A CLI tool to compare agents between Syncro and Huntress platforms.
+A tool to compare agents between Syncro and Huntress platforms.
 
 ## AI Disclosure
 Portions of this codebase were created or modified with assistance from AI language models. All AI-generated code has been reviewed and tested.
@@ -24,7 +24,7 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-4. Configure your API credentials:
+4. (Optional if using GUI) Configure your API credentials:
 
 Run the tool once to generate a `settings.json` template:
 ```bash
