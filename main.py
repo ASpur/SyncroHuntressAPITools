@@ -22,7 +22,7 @@ def create_parser():
         "-f", "--format",
         choices=["csv", "ascii"],
         default="csv",
-        help="Output format (default: csv)"
+        help="Output file format (default: csv)"
     )
     parser.add_argument(
         "--no-color",
