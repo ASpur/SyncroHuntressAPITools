@@ -17,14 +17,14 @@ class SettingsModel(QObject):
         "SyncroAPIKey",
         "SyncroSubDomain",
         "HuntressAPIKey",
-        "huntressApiSecretKey",
+        "HuntressSecretKey",
     ]
     DEFAULT_SETTINGS = {
         "SyncroAPIKey": "",
         "SyncroSubDomain": "",
         "HuntressAPIKey": "",
-        "huntressApiSecretKey": "",
-        "debug": False,
+        "HuntressSecretKey": "",
+        "Debug": False,
     }
 
     def __init__(self, parent=None):
@@ -84,4 +84,4 @@ class SettingsModel(QObject):
 
     def is_debug_enabled(self) -> bool:
         """Check if debug mode is enabled."""
-        return bool(self._settings.get("debug", False))
+        return bool(self._settings.get("Debug", False))
