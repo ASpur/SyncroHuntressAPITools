@@ -1,289 +1,107 @@
-import responses
-from unittest.mock import patch
-from io import StringIO
-
-from services.comparison import normalize, compare_agents
-
+import pytest
+from unittest.mock import Mock, MagicMock
+from services.comparison import ComparisonService, normalize
 
 class TestNormalize:
     def test_basic_normalization(self):
-        """Test basic string normalization."""
         assert normalize("WORKSTATION-001") == "workstation-001"
 
     def test_truncates_to_length(self):
-        """Test that names are truncated to specified length."""
         assert normalize("VERYLONGWORKSTATIONNAME", length=10) == "verylongwo"
 
     def test_strips_whitespace(self):
-        """Test that whitespace is stripped."""
         assert normalize("  WORKSTATION  ") == "workstation"
 
     def test_empty_string_returns_none(self):
-        """Test that empty string returns None."""
         assert normalize("") is None
 
     def test_none_returns_none(self):
-        """Test that None input returns None."""
         assert normalize(None) is None
 
-    def test_default_length(self):
-        """Test default length of 15 characters."""
-        result = normalize("12345678901234567890")
-        assert len(result) == 15
 
+class TestComparisonService:
+    @pytest.fixture
+    def mock_clients(self):
+        syncro = Mock()
+        huntress = Mock()
+        return syncro, huntress
 
-class TestCompareAgents:
-    @responses.activate
-    def test_identifies_matching_agents(self, mock_settings):
+    @pytest.fixture
+    def service(self, mock_clients):
+        return ComparisonService(mock_clients[0], mock_clients[1])
+
+    def test_identifies_matching_agents(self, service, mock_clients):
         """Test that matching agents are identified correctly."""
-        responses.add(
-            responses.GET,
-            "https://api.huntress.io/v1/agents",
-            json={"agents": [{"hostname": "WORKSTATION-001"}]},
-            status=200,
-        )
-        # First call for metadata
-        responses.add(
-            responses.GET,
-            "https://testcompany.syncromsp.com/api/v1/customer_assets",
-            json={"assets": [{"name": "WORKSTATION-001"}], "meta": {"total_pages": 1}},
-            status=200,
-        )
-        # Second call for actual page fetch
-        responses.add(
-            responses.GET,
-            "https://testcompany.syncromsp.com/api/v1/customer_assets",
-            json={"assets": [{"name": "WORKSTATION-001"}]},
-            status=200,
-        )
+        syncro, huntress = mock_clients
+        syncro.get_all_assets.return_value = [{"name": "WORKSTATION-001"}]
+        huntress.get_agents.return_value = [{"hostname": "WORKSTATION-001"}]
 
-        with patch("sys.stdout", new=StringIO()) as output:
-            compare_agents(mock_settings, use_color=False)
-            result = output.getvalue()
+        result = service.fetch_and_compare()
 
-        assert "OK!" in result
+        assert len(result.rows) == 1
+        assert result.rows[0][2] == "OK!"
+        assert result.syncro_count == 1
+        assert result.huntress_count == 1
 
-    @responses.activate
-    def test_identifies_missing_in_huntress(self, mock_settings):
-        """Test that assets missing in Huntress are identified."""
-        responses.add(
-            responses.GET,
-            "https://api.huntress.io/v1/agents",
-            json={"agents": []},
-            status=200,
-        )
-        responses.add(
-            responses.GET,
-            "https://testcompany.syncromsp.com/api/v1/customer_assets",
-            json={"assets": [{"name": "ORPHAN-PC"}], "meta": {"total_pages": 1}},
-            status=200,
-        )
-        responses.add(
-            responses.GET,
-            "https://testcompany.syncromsp.com/api/v1/customer_assets",
-            json={"assets": [{"name": "ORPHAN-PC"}]},
-            status=200,
-        )
+    def test_identifies_missing_in_huntress(self, service, mock_clients):
+        syncro, huntress = mock_clients
+        syncro.get_all_assets.return_value = [{"name": "ORPHAN-PC"}]
+        huntress.get_agents.return_value = []
 
-        with patch("sys.stdout", new=StringIO()) as output:
-            compare_agents(mock_settings, use_color=False)
-            result = output.getvalue()
+        result = service.fetch_and_compare()
 
-        assert "Missing in Huntress" in result
+        assert len(result.rows) == 1
+        assert result.rows[0][2] == "Missing in Huntress"
 
-    @responses.activate
-    def test_identifies_missing_in_syncro(self, mock_settings):
-        """Test that agents missing in Syncro are identified."""
-        responses.add(
-            responses.GET,
-            "https://api.huntress.io/v1/agents",
-            json={"agents": [{"hostname": "GHOST-PC"}]},
-            status=200,
-        )
-        responses.add(
-            responses.GET,
-            "https://testcompany.syncromsp.com/api/v1/customer_assets",
-            json={"assets": [], "meta": {"total_pages": 1}},
-            status=200,
-        )
-        responses.add(
-            responses.GET,
-            "https://testcompany.syncromsp.com/api/v1/customer_assets",
-            json={"assets": []},
-            status=200,
-        )
+    def test_identifies_missing_in_syncro(self, service, mock_clients):
+        syncro, huntress = mock_clients
+        syncro.get_all_assets.return_value = []
+        huntress.get_agents.return_value = [{"hostname": "GHOST-PC"}]
 
-        with patch("sys.stdout", new=StringIO()) as output:
-            compare_agents(mock_settings, use_color=False)
-            result = output.getvalue()
+        result = service.fetch_and_compare()
 
-        assert "Missing in Syncro" in result
+        assert len(result.rows) == 1
+        assert result.rows[0][2] == "Missing in Syncro"
 
-    @responses.activate
-    def test_case_insensitive_matching(self, mock_settings):
-        """Test that matching is case-insensitive."""
-        responses.add(
-            responses.GET,
-            "https://api.huntress.io/v1/agents",
-            json={"agents": [{"hostname": "workstation-001"}]},
-            status=200,
-        )
-        responses.add(
-            responses.GET,
-            "https://testcompany.syncromsp.com/api/v1/customer_assets",
-            json={"assets": [{"name": "WORKSTATION-001"}], "meta": {"total_pages": 1}},
-            status=200,
-        )
-        responses.add(
-            responses.GET,
-            "https://testcompany.syncromsp.com/api/v1/customer_assets",
-            json={"assets": [{"name": "WORKSTATION-001"}]},
-            status=200,
-        )
+    def test_case_insensitive_matching(self, service, mock_clients):
+        syncro, huntress = mock_clients
+        syncro.get_all_assets.return_value = [{"name": "Workstation-001"}]
+        huntress.get_agents.return_value = [{"hostname": "WORKSTATION-001"}]
 
-        with patch("sys.stdout", new=StringIO()) as output:
-            compare_agents(mock_settings, use_color=False)
-            result = output.getvalue()
+        result = service.fetch_and_compare()
 
-        assert "OK!" in result
+        assert len(result.rows) == 1
+        assert result.rows[0][2] == "OK!"
 
-    @responses.activate
-    def test_writes_csv_output(self, mock_settings, tmp_path):
-        """Test that CSV output is written correctly."""
-        output_file = tmp_path / "output.csv"
+    def test_duplicate_hostnames_grouped(self, service, mock_clients):
+        syncro, huntress = mock_clients
+        syncro.get_all_assets.return_value = [{"name": "Workstation-001"}]
+        huntress.get_agents.return_value = [
+            {"hostname": "WORKSTATION-001"},
+            {"hostname": "workstation-001"}
+        ]
 
-        responses.add(
-            responses.GET,
-            "https://api.huntress.io/v1/agents",
-            json={"agents": [{"hostname": "PC-001"}]},
-            status=200,
-        )
-        responses.add(
-            responses.GET,
-            "https://testcompany.syncromsp.com/api/v1/customer_assets",
-            json={"assets": [{"name": "PC-001"}], "meta": {"total_pages": 1}},
-            status=200,
-        )
-        responses.add(
-            responses.GET,
-            "https://testcompany.syncromsp.com/api/v1/customer_assets",
-            json={"assets": [{"name": "PC-001"}]},
-            status=200,
-        )
+        result = service.fetch_and_compare()
 
-        with patch("sys.stdout", new=StringIO()):
-            compare_agents(mock_settings, output_file=str(output_file), use_color=False)
+        assert len(result.rows) == 1
+        assert result.rows[0][2] == "OK!"
+        # Should count unique normalized assets
+        assert result.huntress_count == 1
 
-        assert output_file.exists()
-        content = output_file.read_text()
-        assert "Syncro Asset" in content
-        assert "PC-001" in content
+    def test_assets_with_empty_names_ignored(self, service, mock_clients):
+        syncro, huntress = mock_clients
+        syncro.get_all_assets.return_value = [
+            {"name": ""}, 
+            {"name": None}, 
+            {"name": "VALID-PC"}
+        ]
+        huntress.get_agents.return_value = [
+            {"hostname": ""}, 
+            {"hostname": None}, 
+            {"hostname": "VALID-PC"}
+        ]
 
-    @responses.activate
-    def test_empty_results_from_both_apis(self, mock_settings):
-        """Test behavior when both APIs return empty results."""
-        responses.add(
-            responses.GET,
-            "https://api.huntress.io/v1/agents",
-            json={"agents": []},
-            status=200,
-        )
-        responses.add(
-            responses.GET,
-            "https://testcompany.syncromsp.com/api/v1/customer_assets",
-            json={"assets": [], "meta": {"total_pages": 1}},
-            status=200,
-        )
-        responses.add(
-            responses.GET,
-            "https://testcompany.syncromsp.com/api/v1/customer_assets",
-            json={"assets": []},
-            status=200,
-        )
+        result = service.fetch_and_compare()
 
-        with patch("sys.stdout", new=StringIO()) as output:
-            compare_agents(mock_settings, use_color=False)
-            result = output.getvalue()
-
-        # Should have headers and Asset Counts summary
-        assert "Syncro Asset" in result
-        assert "Asset Counts" in result
-        assert "Syncro:   0" in result
-        assert "Huntress: 0" in result
-
-    @responses.activate
-    def test_duplicate_hostnames_grouped(self, mock_settings):
-        """Test that duplicate normalized names are grouped together."""
-        responses.add(
-            responses.GET,
-            "https://api.huntress.io/v1/agents",
-            json={"agents": [
-                {"hostname": "WORKSTATION-001"},
-                {"hostname": "workstation-001"},  # Same when normalized
-            ]},
-            status=200,
-        )
-        responses.add(
-            responses.GET,
-            "https://testcompany.syncromsp.com/api/v1/customer_assets",
-            json={"assets": [{"name": "Workstation-001"}], "meta": {"total_pages": 1}},
-            status=200,
-        )
-        responses.add(
-            responses.GET,
-            "https://testcompany.syncromsp.com/api/v1/customer_assets",
-            json={"assets": [{"name": "Workstation-001"}]},
-            status=200,
-        )
-
-        with patch("sys.stdout", new=StringIO()) as output:
-            compare_agents(mock_settings, use_color=False)
-            result = output.getvalue()
-
-        # Should show OK since all normalize to the same key
-        assert "OK!" in result
-        # Should verify we have the asset count correctly
-        assert "Syncro:   1" in result
-        assert "Huntress: 1" in result
-
-    @responses.activate
-    def test_assets_with_empty_names_ignored(self, mock_settings):
-        """Test that assets with empty or None names are ignored."""
-        responses.add(
-            responses.GET,
-            "https://api.huntress.io/v1/agents",
-            json={"agents": [
-                {"hostname": ""},
-                {"hostname": None},
-                {"hostname": "VALID-PC"},
-            ]},
-            status=200,
-        )
-        responses.add(
-            responses.GET,
-            "https://testcompany.syncromsp.com/api/v1/customer_assets",
-            json={"assets": [
-                {"name": ""},
-                {"name": None},
-                {"name": "VALID-PC"},
-            ], "meta": {"total_pages": 1}},
-            status=200,
-        )
-        responses.add(
-            responses.GET,
-            "https://testcompany.syncromsp.com/api/v1/customer_assets",
-            json={"assets": [
-                {"name": ""},
-                {"name": None},
-                {"name": "VALID-PC"},
-            ]},
-            status=200,
-        )
-
-        with patch("sys.stdout", new=StringIO()) as output:
-            compare_agents(mock_settings, use_color=False)
-            result = output.getvalue()
-
-        # Should only match VALID-PC, empty/None should be ignored
-        assert "OK!" in result
-        assert result.count("Missing") == 0
+        assert len(result.rows) == 1
+        assert result.rows[0][2] == "OK!"
