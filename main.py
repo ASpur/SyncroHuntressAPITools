@@ -1,7 +1,10 @@
 import argparse
-from config import init_settings
+import sys
+from config import load_settings, ConfigurationError
 from services.comparison import compare_agents
+from rich.console import Console
 
+console = Console()
 
 def create_parser():
     parser = argparse.ArgumentParser(
@@ -36,15 +39,26 @@ def create_parser():
 def main():
     parser = create_parser()
     args = parser.parse_args()
-    settings = init_settings()
+
+    try:
+        settings = load_settings()
+    except ConfigurationError as e:
+        console.print(f"[bold red]Configuration Error:[/bold red] {e}")
+        sys.exit(1)
 
     if args.compare:
-        compare_agents(
-            settings,
-            output_file=args.output,
-            use_color=not args.no_color,
-            output_format=args.format
-        )
+        try:
+            compare_agents(
+                settings,
+                output_file=args.output,
+                use_color=not args.no_color,
+                output_format=args.format
+            )
+        except Exception as e:
+            console.print(f"[bold red]An error occurred during comparison:[/bold red] {e}")
+            if settings.get("debug"):
+                console.print_exception()
+            sys.exit(1)
     else:
         parser.print_help()
 
