@@ -142,9 +142,9 @@ class SettingsWidget(QWidget):
         self.syncro_api_key.setText(self.settings_model.get("SyncroAPIKey", ""))
         self.huntress_api_key.setText(self.settings_model.get("HuntressAPIKey", ""))
         self.huntress_secret.setText(
-            self.settings_model.get("huntressApiSecretKey", "")
+            self.settings_model.get("HuntressSecretKey", "")
         )
-        self.debug_checkbox.setChecked(self.settings_model.get("debug", False))
+        self.debug_checkbox.setChecked(self.settings_model.get("Debug", False))
         self.status_label.setText("")
 
     @Slot()
@@ -154,9 +154,9 @@ class SettingsWidget(QWidget):
         self.settings_model.set("SyncroAPIKey", self.syncro_api_key.text().strip())
         self.settings_model.set("HuntressAPIKey", self.huntress_api_key.text().strip())
         self.settings_model.set(
-            "huntressApiSecretKey", self.huntress_secret.text().strip()
+            "HuntressSecretKey", self.huntress_secret.text().strip()
         )
-        self.settings_model.set("debug", self.debug_checkbox.isChecked())
+        self.settings_model.set("Debug", self.debug_checkbox.isChecked())
 
         if self.settings_model.save():
             self.status_label.setText("Settings saved successfully!")

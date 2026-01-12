@@ -25,8 +25,8 @@ def load_settings(path: str = "settings.json") -> Dict[str, Any]:
         "SyncroAPIKey": "",
         "SyncroSubDomain": "",
         "HuntressAPIKey": "",
-        "huntressApiSecretKey": "",
-        "debug": False,
+        "HuntressSecretKey": "",
+        "Debug": False,
     }
 
     if not settings_path.exists():
@@ -36,18 +36,44 @@ def load_settings(path: str = "settings.json") -> Dict[str, Any]:
         except IOError as e:
             raise ConfigurationError(f"Failed to create settings template: {e}")
 
-        # We created the template, but we still need valid settings to proceed
-        # Depending on design, we might want to raise here to tell user to fill it out
-        # But per original logic, it just creates it. We will raise below if empty.
-
     try:
         with open(settings_path, "r") as f:
             settings = json.load(f)
     except (json.JSONDecodeError, IOError) as e:
         raise ConfigurationError(f"Failed to load settings file: {e}")
 
+    # Migration: Check for old keys and migrate to new keys
+    migrations_needed = False
+    
+    # huntressApiSecretKey -> HuntressSecretKey
+    if "huntressApiSecretKey" in settings:
+        if not settings.get("HuntressSecretKey"):  # Only if new key not already set
+            settings["HuntressSecretKey"] = settings.pop("huntressApiSecretKey")
+            migrations_needed = True
+        else:
+            # Both exist? Remove old one
+            settings.pop("huntressApiSecretKey")
+            migrations_needed = True
+
+    # debug -> Debug
+    if "debug" in settings:
+        # Check type to avoid confusion if user has both
+        if "Debug" not in settings:
+            settings["Debug"] = settings.pop("debug")
+            migrations_needed = True
+        else:
+            settings.pop("debug")
+            migrations_needed = True
+
+    if migrations_needed:
+        try:
+            with open(settings_path, "w") as f:
+                json.dump(settings, f, indent=4)
+        except IOError:
+            # Warn but don't fail, we can still proceed with memory values
+            print(f"Warning: Failed to save migrated settings to {settings_path}")
+
     # Merge with defaults to ensure all keys exist
-    # This handles case where user has old settings file missing new keys
     final_settings = default_settings.copy()
     final_settings.update(settings)
 
@@ -58,7 +84,7 @@ def load_settings(path: str = "settings.json") -> Dict[str, Any]:
             key in default_settings
             and isinstance(value, str)
             and not value
-            and key != "debug"
+            and key != "Debug"
         ):
             missing_fields.append(key)
 

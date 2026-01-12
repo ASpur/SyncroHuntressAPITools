@@ -8,8 +8,8 @@ def mock_settings():
         "SyncroSubDomain": "testcompany",
         "SyncroAPIKey": "fake-syncro-api-key",
         "HuntressAPIKey": "fake-huntress-api-key",
-        "huntressApiSecretKey": "fake-huntress-secret",
-        "debug": False,
+        "HuntressSecretKey": "fake-huntress-secret",
+        "Debug": False,
     }
 
 

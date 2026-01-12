@@ -37,7 +37,7 @@ class ComparisonWorker(QThread):
             )
             huntress_client = HuntressClient(
                 api_key=self.settings["HuntressAPIKey"],
-                secret_key=self.settings["huntressApiSecretKey"],
+                secret_key=self.settings["HuntressSecretKey"],
             )
 
             service = ComparisonService(syncro_client, huntress_client)

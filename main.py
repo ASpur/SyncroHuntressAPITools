@@ -55,7 +55,7 @@ def main():
             )
             huntress_client = HuntressClient(
                 api_key=settings["HuntressAPIKey"],
-                secret_key=settings["huntressApiSecretKey"],
+                secret_key=settings["HuntressSecretKey"],
             )
 
             # Initialize Service
@@ -69,7 +69,7 @@ def main():
                 # Actually fetch_and_compare uses ThreadPoolExecutor internally.
 
             # Debug Output
-            if settings.get("debug"):
+            if settings.get("Debug"):
                 os.makedirs("debug", exist_ok=True)
                 with open("debug/agentDumpSyncro.json", "w") as f:
                     json.dump(result.syncro_assets, f, indent=4)
@@ -107,7 +107,7 @@ def main():
             console.print(
                 f"[bold red]An error occurred during comparison:[/bold red] {e}"
             )
-            if settings.get("debug"):
+            if settings.get("Debug"):
                 console.print_exception()
             sys.exit(1)
     else:

@@ -10,7 +10,7 @@ from const import HUNTRESS_API_URL
 def huntress_client(mock_settings):
     client = HuntressClient(
         api_key=mock_settings["HuntressAPIKey"],
-        secret_key=mock_settings["huntressApiSecretKey"],
+        secret_key=mock_settings["HuntressSecretKey"],
     )
     return client
 
