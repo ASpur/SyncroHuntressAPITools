@@ -205,9 +205,11 @@ class TestCompareAgents:
             compare_agents(mock_settings, use_color=False)
             result = output.getvalue()
 
-        # Should only have header and separator, no data rows
-        lines = [l for l in result.strip().split("\n") if l]
-        assert len(lines) == 2  # Header + separator
+        # Should have headers and Asset Counts summary
+        assert "Syncro Asset" in result
+        assert "Asset Counts" in result
+        assert "Syncro:   0" in result
+        assert "Huntress: 0" in result
 
     @responses.activate
     def test_duplicate_hostnames_grouped(self, mock_settings):
@@ -240,9 +242,9 @@ class TestCompareAgents:
 
         # Should show OK since all normalize to the same key
         assert "OK!" in result
-        # Should only have one data row (plus header and separator)
-        lines = [l for l in result.strip().split("\n") if l]
-        assert len(lines) == 3
+        # Should verify we have the asset count correctly
+        assert "Syncro:   1" in result
+        assert "Huntress: 1" in result
 
     @responses.activate
     def test_assets_with_empty_names_ignored(self, mock_settings):
