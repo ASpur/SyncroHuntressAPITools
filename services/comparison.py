@@ -30,7 +30,7 @@ class ComparisonService:
         self.syncro_client = syncro_client
         self.huntress_client = huntress_client
 
-    def fetch_and_compare(self) -> ComparisonResult:
+    def fetch_and_compare(self, mismatches_first: bool = True) -> ComparisonResult:
         """Fetch data from both APIs and perform comparison."""
         from concurrent.futures import ThreadPoolExecutor
 
@@ -43,7 +43,9 @@ class ComparisonService:
             huntress_agents = huntress_future.result()
             syncro_assets = syncro_future.result()
 
-        rows = self._build_comparison(syncro_assets, huntress_agents)
+        rows = self._build_comparison(
+            syncro_assets, huntress_agents, mismatches_first=mismatches_first
+        )
 
         # Calculate asset counts (unique normalized)
         syncro_count = len(self._build_map(syncro_assets))
@@ -70,7 +72,10 @@ class ComparisonService:
         return item_map
 
     def _build_comparison(
-        self, syncro_assets: List[Dict], huntress_agents: List[Dict]
+        self,
+        syncro_assets: List[Dict],
+        huntress_agents: List[Dict],
+        mismatches_first: bool = True,
     ) -> List[Tuple[str, str, str]]:
         """Build comparison rows from data."""
         syncro_map = self._build_map(syncro_assets, "name")
@@ -95,7 +100,16 @@ class ComparisonService:
 
             rows.append((s_display, h_display, status))
 
-        # Sort: Errors/Mismatches first, OK at bottom, then alphabetical
-        rows.sort(key=lambda r: (0 if r[2] != "OK!" else 1, r[0].lower(), r[1].lower()))
+        # Sort based on configuration
+        if mismatches_first:
+            # Errors/Mismatches first, OK at bottom
+            rows.sort(
+                key=lambda r: (0 if r[2] != "OK!" else 1, r[0].lower(), r[1].lower())
+            )
+        else:
+            # OK first, Errors/Mismatches at bottom
+            rows.sort(
+                key=lambda r: (0 if r[2] == "OK!" else 1, r[0].lower(), r[1].lower())
+            )
 
         return rows

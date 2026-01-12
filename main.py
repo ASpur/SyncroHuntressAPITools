@@ -63,10 +63,7 @@ def main():
 
             # Fetch and Compare
             with RichSpinner("Fetching and comparing agents..."):
-                result = (
-                    service.fetch_and_compare()
-                )  # This now happens in worker thread inside service if we wanted.
-                # Actually fetch_and_compare uses ThreadPoolExecutor internally.
+                result = service.fetch_and_compare(mismatches_first=False)
 
             # Debug Output
             if settings.get("Debug"):

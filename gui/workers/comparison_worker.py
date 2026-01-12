@@ -46,10 +46,9 @@ class ComparisonWorker(QThread):
                 return
 
             self.progress.emit("Fetching and comparing data...")
-            # Note: In a real GUI, we might want granular progress from
             # the ThreadPoolExecutor. For now, we wait for the service
             # to return the full result.
-            comparison_result = service.fetch_and_compare()
+            comparison_result = service.fetch_and_compare(mismatches_first=True)
 
             if self._is_cancelled:
                 return
