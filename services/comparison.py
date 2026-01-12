@@ -88,9 +88,7 @@ class ComparisonService:
             
             rows.append((s_display, h_display, status))
 
-        # Sort: OK first, errors at bottom, then alphabetical
-        # Note: Previous sort was OK first. User might prefer problems first?
-        # Keeping existing logic: OK at top.
-        rows.sort(key=lambda r: (0 if r[2] == "OK!" else 1, r[0].lower(), r[1].lower()))
+        # Sort: Errors/Mismatches first, OK at bottom, then alphabetical
+        rows.sort(key=lambda r: (0 if r[2] != "OK!" else 1, r[0].lower(), r[1].lower()))
         
         return rows
