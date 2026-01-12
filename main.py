@@ -1,8 +1,13 @@
 import argparse
 import sys
-from config import load_settings, ConfigurationError
-from services.comparison import compare_agents
+import os
+import json
 from rich.console import Console
+
+from config import load_settings, ConfigurationError
+from api.client import SyncroClient, HuntressClient
+from services.comparison import ComparisonService
+from utils.output import write_csv, write_ascii_table, print_colored_table, RichSpinner
 
 console = Console()
 
@@ -48,12 +53,46 @@ def main():
 
     if args.compare:
         try:
-            compare_agents(
-                settings,
-                output_file=args.output,
-                use_color=not args.no_color,
-                output_format=args.format
+            # Initialize Clients
+            syncro_client = SyncroClient(
+                api_key=settings['SyncroAPIKey'],
+                subdomain=settings['SyncroSubDomain']
             )
+            huntress_client = HuntressClient(
+                api_key=settings['HuntressAPIKey'], 
+                secret_key=settings['huntressApiSecretKey']
+            )
+            
+            # Initialize Service
+            service = ComparisonService(syncro_client, huntress_client)
+            
+            # Fetch and Compare
+            with RichSpinner("Fetching and comparing agents..."):
+                result = service.fetch_and_compare() # This now happens in worker thread inside service if we wanted, but here it waits.
+                # Actually fetch_and_compare uses ThreadPoolExecutor internally for fetching.
+
+            # Debug Output
+            if settings.get("debug"):
+                os.makedirs("debug", exist_ok=True)
+                with open("debug/agentDumpSyncro.json", "w") as f:
+                    json.dump(result.syncro_assets, f, indent=4)
+                with open("debug/agentDumpHuntress.json", "w") as f:
+                    json.dump(result.huntress_agents, f, indent=4)
+            
+            # Output Results
+            if args.output:
+                try:
+                    if args.format == "csv":
+                        write_csv(args.output, result.rows)
+                    elif args.format == "ascii":
+                        write_ascii_table(args.output, result.rows, result.syncro_count, result.huntress_count)
+                    console.print(f"[green]Results written to {args.output}[/green]")
+                except Exception as e:
+                    console.print(f"[red]Failed to write {args.format.upper()} {args.output}: {e}[/red]")
+
+            # Print to console
+            print_colored_table(result.rows, not args.no_color, result.syncro_count, result.huntress_count)
+
         except Exception as e:
             console.print(f"[bold red]An error occurred during comparison:[/bold red] {e}")
             if settings.get("debug"):
