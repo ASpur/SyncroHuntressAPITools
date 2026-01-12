@@ -2,14 +2,15 @@ import pytest
 import responses
 from requests.exceptions import HTTPError, RetryError
 from api.client import SyncroClient
-from const import SYNCRO_BASE_URL_TEMPLATE
+
 
 @pytest.fixture
 def syncro_client(mock_settings):
     return SyncroClient(
-        api_key=mock_settings['SyncroAPIKey'],
-        subdomain=mock_settings['SyncroSubDomain']
+        api_key=mock_settings["SyncroAPIKey"],
+        subdomain=mock_settings["SyncroSubDomain"],
     )
+
 
 class TestGetAssets:
     @responses.activate
@@ -84,7 +85,8 @@ class TestGetAllAssets:
             status=200,
         )
 
-        # We mock ThreadPoolExecutor if we wanted strict unit testing, but integrations tests fine here
+        # We mock ThreadPoolExecutor if we wanted strict unit testing,
+        # but integrations tests fine here
         result = syncro_client.get_all_assets()
 
         assert len(result) == 2

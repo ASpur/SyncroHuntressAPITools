@@ -2,7 +2,7 @@
 
 from typing import List, Tuple
 
-from PySide6.QtCore import QAbstractTableModel, Qt, QModelIndex, QSortFilterProxyModel
+from PySide6.QtCore import QAbstractTableModel, QModelIndex, QSortFilterProxyModel, Qt
 from PySide6.QtGui import QColor
 
 

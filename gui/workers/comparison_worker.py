@@ -1,10 +1,10 @@
 """Worker thread for running comparison operations."""
 
-from typing import Dict, List, Tuple, Optional
+from typing import Dict
 
 from PySide6.QtCore import QThread, Signal
 
-from api.client import SyncroClient, HuntressClient
+from api.client import HuntressClient, SyncroClient
 from services.comparison import ComparisonService
 
 
@@ -30,34 +30,37 @@ class ComparisonWorker(QThread):
         """Execute the comparison operation."""
         try:
             self.progress.emit("Initializing clients...")
-            
+
             syncro_client = SyncroClient(
-                api_key=self.settings['SyncroAPIKey'],
-                subdomain=self.settings['SyncroSubDomain']
+                api_key=self.settings["SyncroAPIKey"],
+                subdomain=self.settings["SyncroSubDomain"],
             )
             huntress_client = HuntressClient(
-                api_key=self.settings['HuntressAPIKey'],
-                secret_key=self.settings['huntressApiSecretKey']
+                api_key=self.settings["HuntressAPIKey"],
+                secret_key=self.settings["huntressApiSecretKey"],
             )
-            
+
             service = ComparisonService(syncro_client, huntress_client)
 
             if self._is_cancelled:
                 return
 
             self.progress.emit("Fetching and comparing data...")
-            # Note: In a real GUI, we might want granular progress from the ThreadPoolExecutor.
-            # For now, we wait for the service to return the full result.
+            # Note: In a real GUI, we might want granular progress from
+            # the ThreadPoolExecutor. For now, we wait for the service
+            # to return the full result.
             comparison_result = service.fetch_and_compare()
 
             if self._is_cancelled:
                 return
 
             # Emit raw data for debug view
-            self.raw_data.emit({
-                "syncro": comparison_result.syncro_assets,
-                "huntress": comparison_result.huntress_agents,
-            })
+            self.raw_data.emit(
+                {
+                    "syncro": comparison_result.syncro_assets,
+                    "huntress": comparison_result.huntress_agents,
+                }
+            )
 
             if self._is_cancelled:
                 return

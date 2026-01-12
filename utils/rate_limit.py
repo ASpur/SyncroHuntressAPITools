@@ -38,7 +38,9 @@ class RateLimiter:
 
             # Calculate wait time
             wait_time = (1 - self.tokens) / self.rate
-            sys.stdout.write(f"\r{self.name} rate limit reached, waiting {wait_time:.1f}s...")
+            sys.stdout.write(
+                f"\r{self.name} rate limit reached, waiting {wait_time:.1f}s..."
+            )
             sys.stdout.flush()
 
             time.sleep(wait_time)

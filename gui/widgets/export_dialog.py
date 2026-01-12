@@ -2,22 +2,22 @@
 
 from typing import List, Tuple
 
-from PySide6.QtWidgets import (
-    QDialog,
-    QVBoxLayout,
-    QHBoxLayout,
-    QFormLayout,
-    QComboBox,
-    QLineEdit,
-    QPushButton,
-    QCheckBox,
-    QFileDialog,
-    QMessageBox,
-    QGroupBox,
-)
 from PySide6.QtCore import Slot
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QDialog,
+    QFileDialog,
+    QFormLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QVBoxLayout,
+)
 
-from utils.output import write_csv, write_ascii_table
+from utils.output import write_ascii_table, write_csv
 
 
 class ExportDialog(QDialog):
@@ -70,7 +70,9 @@ class ExportDialog(QDialog):
         # Summary
         total = len(self.results)
         issues = sum(1 for r in self.results if r[2] != "OK!")
-        self.summary_label = QPushButton(f"Ready to export {total} rows ({issues} issues)")
+        self.summary_label = QPushButton(
+            f"Ready to export {total} rows ({issues} issues)"
+        )
         self.summary_label.setEnabled(False)
         self.summary_label.setFlat(True)
         layout.addWidget(self.summary_label)

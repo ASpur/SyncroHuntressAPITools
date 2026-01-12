@@ -1,16 +1,19 @@
 import pytest
 import responses
 from requests.exceptions import HTTPError, RetryError
+
 from api.client import HuntressClient
 from const import HUNTRESS_API_URL
+
 
 @pytest.fixture
 def huntress_client(mock_settings):
     client = HuntressClient(
-        api_key=mock_settings['HuntressAPIKey'],
-        secret_key=mock_settings['huntressApiSecretKey']
+        api_key=mock_settings["HuntressAPIKey"],
+        secret_key=mock_settings["huntressApiSecretKey"],
     )
     return client
+
 
 class TestGetAgents:
     @responses.activate

@@ -1,18 +1,17 @@
 """Settings configuration widget."""
 
+from PySide6.QtCore import Slot
 from PySide6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QFormLayout,
-    QLineEdit,
     QCheckBox,
-    QPushButton,
+    QFormLayout,
+    QGroupBox,
     QHBoxLayout,
     QLabel,
-    QMessageBox,
-    QGroupBox,
+    QLineEdit,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
 )
-from PySide6.QtCore import Slot
 
 from gui.models.settings_model import SettingsModel
 
@@ -77,7 +76,9 @@ class SettingsWidget(QWidget):
             )
         )
         self.huntress_show_btn.toggled.connect(
-            lambda checked: self.huntress_show_btn.setText("Hide" if checked else "Show")
+            lambda checked: self.huntress_show_btn.setText(
+                "Hide" if checked else "Show"
+            )
         )
         huntress_key_layout.addWidget(self.huntress_show_btn)
         huntress_layout.addRow("API Key:", huntress_key_layout)
@@ -140,7 +141,9 @@ class SettingsWidget(QWidget):
         self.syncro_subdomain.setText(self.settings_model.get("SyncroSubDomain", ""))
         self.syncro_api_key.setText(self.settings_model.get("SyncroAPIKey", ""))
         self.huntress_api_key.setText(self.settings_model.get("HuntressAPIKey", ""))
-        self.huntress_secret.setText(self.settings_model.get("huntressApiSecretKey", ""))
+        self.huntress_secret.setText(
+            self.settings_model.get("huntressApiSecretKey", "")
+        )
         self.debug_checkbox.setChecked(self.settings_model.get("debug", False))
         self.status_label.setText("")
 
@@ -150,7 +153,9 @@ class SettingsWidget(QWidget):
         self.settings_model.set("SyncroSubDomain", self.syncro_subdomain.text().strip())
         self.settings_model.set("SyncroAPIKey", self.syncro_api_key.text().strip())
         self.settings_model.set("HuntressAPIKey", self.huntress_api_key.text().strip())
-        self.settings_model.set("huntressApiSecretKey", self.huntress_secret.text().strip())
+        self.settings_model.set(
+            "huntressApiSecretKey", self.huntress_secret.text().strip()
+        )
         self.settings_model.set("debug", self.debug_checkbox.isChecked())
 
         if self.settings_model.save():

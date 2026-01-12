@@ -1,25 +1,25 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional
+
 from requests.auth import HTTPBasicAuth
 
 from api.base import BaseClient
-from utils.rate_limit import RateLimiter
 from const import (
-    SYNCRO_BASE_URL_TEMPLATE,
-    SYNCRO_RATE_LIMIT,
-    SYNCRO_BURST,
     HUNTRESS_API_URL,
     HUNTRESS_RATE_LIMIT,
+    SYNCRO_BASE_URL_TEMPLATE,
+    SYNCRO_BURST,
+    SYNCRO_RATE_LIMIT,
 )
+from utils.rate_limit import RateLimiter
+
 
 class SyncroClient(BaseClient):
     """Client for interacting with the Syncro MSP API."""
 
     def __init__(self, api_key: str, subdomain: str):
         rate_limiter = RateLimiter(
-            rate=SYNCRO_RATE_LIMIT, 
-            burst=SYNCRO_BURST, 
-            name="Syncro API"
+            rate=SYNCRO_RATE_LIMIT, burst=SYNCRO_BURST, name="Syncro API"
         )
         super().__init__(rate_limiter=rate_limiter)
         self.api_key = api_key
@@ -28,12 +28,14 @@ class SyncroClient(BaseClient):
     def _make_request(self, endpoint: str, params: Optional[Dict] = None) -> Dict:
         """Make a request to the Syncro API."""
         url = f"{self.base_url}{endpoint}"
-        
+
         if params is None:
             params = {}
-        params['api_key'] = self.api_key
+        params["api_key"] = self.api_key
 
-        response = self.request("GET", url, params=params, headers={"Accept": "application/json"})
+        response = self.request(
+            "GET", url, params=params, headers={"Accept": "application/json"}
+        )
         try:
             data = response.json()
         except Exception as e:
@@ -91,10 +93,7 @@ class HuntressClient(BaseClient):
     """Client for interacting with the Huntress API."""
 
     def __init__(self, api_key: str, secret_key: str):
-        rate_limiter = RateLimiter(
-            rate=HUNTRESS_RATE_LIMIT, 
-            name="Huntress API"
-        )
+        rate_limiter = RateLimiter(rate=HUNTRESS_RATE_LIMIT, name="Huntress API")
         super().__init__(rate_limiter=rate_limiter)
         self.auth = HTTPBasicAuth(api_key, secret_key)
 

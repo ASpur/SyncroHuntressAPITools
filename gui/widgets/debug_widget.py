@@ -2,17 +2,17 @@
 
 import json
 
+from PySide6.QtCore import Slot
 from PySide6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QTabWidget,
+    QFileDialog,
+    QHBoxLayout,
+    QMessageBox,
     QPlainTextEdit,
     QPushButton,
-    QHBoxLayout,
-    QFileDialog,
-    QMessageBox,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
 )
-from PySide6.QtCore import Slot
 
 
 class DebugWidget(QWidget):
@@ -33,13 +33,17 @@ class DebugWidget(QWidget):
         # Syncro data tab
         self.syncro_text = QPlainTextEdit()
         self.syncro_text.setReadOnly(True)
-        self.syncro_text.setPlaceholderText("Run a comparison to see raw Syncro API data")
+        self.syncro_text.setPlaceholderText(
+            "Run a comparison to see raw Syncro API data"
+        )
         self.tabs.addTab(self.syncro_text, "Syncro Assets")
 
         # Huntress data tab
         self.huntress_text = QPlainTextEdit()
         self.huntress_text.setReadOnly(True)
-        self.huntress_text.setPlaceholderText("Run a comparison to see raw Huntress API data")
+        self.huntress_text.setPlaceholderText(
+            "Run a comparison to see raw Huntress API data"
+        )
         self.tabs.addTab(self.huntress_text, "Huntress Agents")
 
         layout.addWidget(self.tabs)
@@ -66,9 +70,7 @@ class DebugWidget(QWidget):
 
         # Format and display Syncro data
         syncro_data = data.get("syncro", [])
-        self.syncro_text.setPlainText(
-            json.dumps(syncro_data, indent=2, default=str)
-        )
+        self.syncro_text.setPlainText(json.dumps(syncro_data, indent=2, default=str))
 
         # Format and display Huntress data
         huntress_data = data.get("huntress", [])
@@ -92,9 +94,7 @@ class DebugWidget(QWidget):
         if not self._raw_data:
             return
 
-        folder = QFileDialog.getExistingDirectory(
-            self, "Select Folder for Debug Files"
-        )
+        folder = QFileDialog.getExistingDirectory(self, "Select Folder for Debug Files")
 
         if not folder:
             return
