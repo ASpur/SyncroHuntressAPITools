@@ -1,30 +1,23 @@
-import base64
-import requests
-from requests.exceptions import JSONDecodeError
 from typing import Dict, List
+from requests.auth import HTTPBasicAuth
+from api.base import BaseClient
 from utils.rate_limit import RateLimiter
 
 # Rate limiting: 60 requests per second
 _rate_limiter = RateLimiter(rate=60.0, name="Huntress API")
-
+_client = BaseClient(rate_limiter=_rate_limiter)
 
 def get_agents(settings: Dict, page: int = 1, limit: int = 500) -> List[Dict]:
     """Get Huntress agents."""
-    _rate_limiter.acquire()
+    url = "https://api.huntress.io/v1/agents"
+    
+    auth = HTTPBasicAuth(settings['HuntressAPIKey'], settings['huntressApiSecretKey'])
+    params = {"page": page, "limit": limit}
 
-    auth_string = f"{settings['HuntressAPIKey']}:{settings['huntressApiSecretKey']}"
-    auth_bytes = auth_string.encode('utf-8')
-    auth_encoded = base64.b64encode(auth_bytes).decode('utf-8')
-
-    url = f"https://api.huntress.io/v1/agents?page={page}&limit={limit}"
-    headers = {"Authorization": f"Basic {auth_encoded}"}
-
-    response = requests.get(url, headers=headers)
-    response.raise_for_status()
-
+    response = _client.request("GET", url, auth=auth, params=params)
     try:
         data = response.json()
-    except JSONDecodeError as e:
+    except Exception as e:
         raise ValueError(f"Failed to parse JSON response: {e}")
 
     if "agents" not in data:
