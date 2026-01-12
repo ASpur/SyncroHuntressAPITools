@@ -1,80 +1,44 @@
 import csv
 import sys
-import threading
-import time
 from typing import List, Tuple
-
-try:
-    import colorama
-    colorama.init()
-    COLORAMA_AVAILABLE = True
-except ImportError:
-    COLORAMA_AVAILABLE = False
-
-
-class Spinner:
-    """A loading spinner for long-running operations."""
-
-    FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
-
-    def __init__(self, message: str = "Loading"):
-        self.message = message
-        self._stop_event = threading.Event()
-        self._thread = None
-
-    def _spin(self):
-        idx = 0
-        while not self._stop_event.is_set():
-            frame = self.FRAMES[idx % len(self.FRAMES)]
-            sys.stdout.write(f"\r{frame} {self.message}...")
-            sys.stdout.flush()
-            idx += 1
-            time.sleep(0.1)
-        sys.stdout.write("\r" + " " * (len(self.message) + 5) + "\r")
-        sys.stdout.flush()
-
-    def start(self):
-        self._stop_event.clear()
-        self._thread = threading.Thread(target=self._spin)
-        self._thread.start()
-
-    def stop(self):
-        self._stop_event.set()
-        if self._thread:
-            self._thread.join()
-
-    def __enter__(self):
-        self.start()
-        return self
-
-    def __exit__(self, *args):
-        self.stop()
+from rich.console import Console
+from rich.table import Table
+from rich.progress import Progress, SpinnerColumn, TextColumn
 
 # Constants
 HEADERS = ("Syncro Asset", "Huntress Asset", "Status")
 STATUS_OK = "OK!"
 
+console = Console()
 
-def _calculate_column_widths(rows: List[Tuple[str, str, str]]) -> List[int]:
-    """Calculate the width needed for each column based on content."""
-    return [
-        max(len(header), max((len(row[i]) for row in rows), default=0))
-        for i, header in enumerate(HEADERS)
-    ]
+class RichSpinner:
+    """Wrapper around rich progress for spinner functionality."""
+    def __init__(self, message: str = "Loading"):
+        self.message = message
+        self.progress = Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            transient=True
+        )
+        self.task = None
 
+    def __enter__(self):
+        self.progress.start()
+        self.task = self.progress.add_task(description=self.message, total=None)
+        return self
 
-def _make_border(widths: List[int], fill_char: str = "-") -> str:
-    """Generate a table border line like +----+----+----+"""
-    return "+" + "+".join(fill_char * (w + 2) for w in widths) + "+"
-
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.progress.stop()
 
 def write_csv(filename: str, rows: List[Tuple[str, str, str]]) -> None:
     """Write results to CSV file."""
-    with open(filename, "w", newline="", encoding="utf-8") as csvf:
-        writer = csv.writer(csvf)
-        writer.writerow(HEADERS)
-        writer.writerows(rows)
-
+    try:
+        with open(filename, "w", newline="", encoding="utf-8") as csvf:
+            writer = csv.writer(csvf)
+            writer.writerow(HEADERS)
+            writer.writerows(rows)
+    except IOError as e:
+        console.print(f"[red]Failed to write CSV: {e}[/red]")
 
 def write_ascii_table(
     filename: str,
@@ -83,27 +47,30 @@ def write_ascii_table(
     huntress_count: int = 0
 ) -> None:
     """Write results to ASCII table file."""
-    widths = _calculate_column_widths(rows)
-
-    def format_row(values: Tuple[str, str, str]) -> str:
-        cells = " | ".join(val.ljust(widths[i]) for i, val in enumerate(values))
-        return f"| {cells} |"
-
-    with open(filename, "w", encoding="utf-8") as f:
-        # Write asset counts summary
-        f.write("Asset Counts\n")
-        f.write(f"  Syncro:   {syncro_count}\n")
-        f.write(f"  Huntress: {huntress_count}\n")
-        f.write("\n")
-
-        # Write comparison table
-        f.write(_make_border(widths) + "\n")
-        f.write(format_row(HEADERS) + "\n")
-        f.write(_make_border(widths, "=") + "\n")
-        for row in rows:
-            f.write(format_row(row) + "\n")
-        f.write(_make_border(widths) + "\n")
-
+    try:
+        with open(filename, "w", encoding="utf-8") as f:
+            # We can use rich's export functionality or keep simple ascii
+            # For file output, simple string manipulation is often safer/cleaner than ensuring no ansi codes leak
+            # Re-implementing simple ascii here for file safety, or could use console.print(file=f)
+            
+            f.write("Asset Counts\n")
+            f.write(f"  Syncro:   {syncro_count}\n")
+            f.write(f"  Huntress: {huntress_count}\n\n")
+            
+            # Simple column width calc
+            widths = [max(len(str(val)) for val in col) for col in zip(HEADERS, *rows)]
+            widths = [max(w, len(h)) for h, w in zip(HEADERS, widths)]
+            
+            header = " | ".join(h.ljust(w) for h, w in zip(HEADERS, widths))
+            separator = "-+-".join("-" * w for w in widths)
+            
+            f.write(f"{header}\n{separator}\n")
+            for row in rows:
+                line = " | ".join(val.ljust(w) for val, w in zip(row, widths))
+                f.write(f"{line}\n")
+                
+    except IOError as e:
+        console.print(f"[red]Failed to write ASCII table: {e}[/red]")
 
 def print_colored_table(
     rows: List[Tuple[str, str, str]],
@@ -111,28 +78,24 @@ def print_colored_table(
     syncro_count: int = 0,
     huntress_count: int = 0
 ) -> None:
-    """Print colored table to console."""
-    use_color = use_color and COLORAMA_AVAILABLE
-
-    if use_color:
-        GREEN = colorama.Fore.GREEN
-        RED = colorama.Fore.RED
-        RESET = colorama.Style.RESET_ALL
+    """Print styled table to console using rich."""
+    if not use_color:
+        # Fallback for no-color request
+        table = Table(show_header=True, header_style="bold")
     else:
-        GREEN = RED = RESET = ""
+        table = Table(show_header=True, header_style="bold magenta")
 
-    widths = _calculate_column_widths(rows)
-
-    header = "  ".join(h.ljust(widths[i]) for i, h in enumerate(HEADERS))
-    print(header)
-    print("-" * (sum(widths) + 4))
+    for header in HEADERS:
+        table.add_column(header)
 
     for syncro, huntress, status in rows:
-        color = GREEN if status == STATUS_OK else RED
-        print(f"{syncro.ljust(widths[0])}  {huntress.ljust(widths[1])}  {color}{status.ljust(widths[2])}{RESET}")
+        status_style = "green" if status == STATUS_OK else "red"
+        if not use_color:
+            status_style = None
+            
+        table.add_row(syncro, huntress, f"[{status_style}]{status}[/{status_style}]" if status_style else status)
 
-    # Print asset counts summary
-    print()
-    print("Asset Counts")
-    print(f"  Syncro:   {syncro_count}")
-    print(f"  Huntress: {huntress_count}")
+    console.print(table)
+    console.print("\n[bold]Asset Counts[/bold]")
+    console.print(f"  Syncro:   {syncro_count}")
+    console.print(f"  Huntress: {huntress_count}")

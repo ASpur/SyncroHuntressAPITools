@@ -2,7 +2,7 @@ import os
 import json
 from typing import Dict, List, Tuple, Optional
 from api import syncro, huntress
-from utils.output import write_csv, write_ascii_table, print_colored_table, Spinner
+from utils.output import write_csv, write_ascii_table, print_colored_table, RichSpinner, console
 
 MAX_NAME_WIDTH = 15
 def normalize(name: str, length: int = MAX_NAME_WIDTH) -> Optional[str]:
@@ -21,7 +21,7 @@ def compare_agents(
     from concurrent.futures import ThreadPoolExecutor
 
     # Fetch data from both APIs in parallel
-    with Spinner("Fetching agents from APIs"):
+    with RichSpinner("Fetching agents from APIs"):
         with ThreadPoolExecutor(max_workers=2) as executor:
             huntress_future = executor.submit(huntress.get_agents, settings)
             syncro_future = executor.submit(syncro.get_all_assets, settings)
@@ -85,9 +85,9 @@ def compare_agents(
                 write_csv(output_file, rows)
             elif output_format == "ascii":
                 write_ascii_table(output_file, rows, syncro_count, huntress_count)
-            print(f"Results written to {output_file}")
+            console.print(f"[green]Results written to {output_file}[/green]")
         except Exception as e:
-            print(f"Failed to write {output_format.upper()} {output_file}: {e}")
+            console.print(f"[red]Failed to write {output_format.upper()} {output_file}: {e}[/red]")
 
     # Print to console
     print_colored_table(rows, use_color, syncro_count, huntress_count)
