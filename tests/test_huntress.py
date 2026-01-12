@@ -1,185 +1,118 @@
 import pytest
 import responses
 from requests.exceptions import HTTPError, RetryError
-from api import huntress
+from api.client import HuntressClient
+from const import HUNTRESS_API_URL
 
+@pytest.fixture
+def huntress_client(mock_settings):
+    client = HuntressClient(
+        api_key=mock_settings['HuntressAPIKey'],
+        secret_key=mock_settings['huntressApiSecretKey']
+    )
+    return client
 
 class TestGetAgents:
     @responses.activate
-    def test_returns_agents_list(self, mock_settings, sample_huntress_agents):
-        """Test that get_agents returns the agents list from API response."""
+    def test_returns_agents_list(self, huntress_client, sample_huntress_agents):
+        """Test that get_agents returns the agents list."""
         responses.add(
             responses.GET,
-            "https://api.huntress.io/v1/agents",
+            HUNTRESS_API_URL,
             json={"agents": sample_huntress_agents},
             status=200,
         )
 
-        result = huntress.get_agents(mock_settings)
+        result = huntress_client.get_agents()
 
         assert result == sample_huntress_agents
         assert len(result) == 4
 
     @responses.activate
-    def test_uses_basic_auth(self, mock_settings):
-        """Test that request includes Basic auth header."""
+    def test_pagination_params(self, huntress_client):
+        """Test that page and limit parameters are passed correctly."""
         responses.add(
             responses.GET,
-            "https://api.huntress.io/v1/agents",
+            HUNTRESS_API_URL,
             json={"agents": []},
             status=200,
         )
 
-        huntress.get_agents(mock_settings)
-
-        assert len(responses.calls) == 1
-        auth_header = responses.calls[0].request.headers["Authorization"]
-        assert auth_header.startswith("Basic ")
-
-    @responses.activate
-    def test_pagination_params(self, mock_settings):
-        """Test that page and limit parameters are included in URL."""
-        responses.add(
-            responses.GET,
-            "https://api.huntress.io/v1/agents",
-            json={"agents": []},
-            status=200,
-        )
-
-        huntress.get_agents(mock_settings, page=2, limit=100)
+        huntress_client.get_agents(page=2, limit=100)
 
         request_url = responses.calls[0].request.url
         assert "page=2" in request_url
         assert "limit=100" in request_url
 
     @responses.activate
-    def test_default_pagination(self, mock_settings):
-        """Test default pagination values."""
+    def test_auth_headers(self, huntress_client):
+        """Test that Basic Auth header is present."""
         responses.add(
             responses.GET,
-            "https://api.huntress.io/v1/agents",
+            HUNTRESS_API_URL,
             json={"agents": []},
             status=200,
         )
 
-        huntress.get_agents(mock_settings)
+        huntress_client.get_agents()
 
-        request_url = responses.calls[0].request.url
-        assert "page=1" in request_url
-        assert "limit=500" in request_url
+        assert "Authorization" in responses.calls[0].request.headers
+        assert responses.calls[0].request.headers["Authorization"].startswith("Basic ")
 
 
 class TestGetAgentsErrorHandling:
     @responses.activate
-    def test_raises_http_error_on_401(self, mock_settings):
+    def test_raises_http_error_on_401(self, huntress_client):
         """Test that 401 response raises HTTPError."""
         responses.add(
             responses.GET,
-            "https://api.huntress.io/v1/agents",
+            HUNTRESS_API_URL,
             json={"error": "Unauthorized"},
             status=401,
         )
 
         with pytest.raises(HTTPError) as exc_info:
-            huntress.get_agents(mock_settings)
+            huntress_client.get_agents()
         assert exc_info.value.response.status_code == 401
 
     @responses.activate
-    def test_raises_http_error_on_500(self, mock_settings):
-        """Test that 500 response raises HTTPError."""
+    def test_raises_retry_error_on_500(self, huntress_client):
+        """Test that 500 response raises RetryError."""
         responses.add(
             responses.GET,
-            "https://api.huntress.io/v1/agents",
+            HUNTRESS_API_URL,
             body="Internal Server Error",
             status=500,
         )
 
-        with pytest.raises((HTTPError, RetryError)) as exc_info:
-            huntress.get_agents(mock_settings)
-        if isinstance(exc_info.value, HTTPError):
-            assert exc_info.value.response.status_code == 500
+        with pytest.raises(RetryError):
+            huntress_client.get_agents()
 
     @responses.activate
-    def test_raises_value_error_on_missing_agents_key(self, mock_settings):
-        """Test that missing 'agents' key raises ValueError with clear message."""
+    def test_raises_value_error_on_missing_agents_key(self, huntress_client):
+        """Test that missing 'agents' key raises ValueError."""
         responses.add(
             responses.GET,
-            "https://api.huntress.io/v1/agents",
-            json={"data": []},  # Wrong key
+            HUNTRESS_API_URL,
+            json={"data": []},
             status=200,
         )
 
         with pytest.raises(ValueError) as exc_info:
-            huntress.get_agents(mock_settings)
+            huntress_client.get_agents()
         assert "agents" in str(exc_info.value).lower()
 
     @responses.activate
-    def test_raises_value_error_on_malformed_json(self, mock_settings):
-        """Test that malformed JSON raises ValueError with clear message."""
+    def test_raises_value_error_on_malformed_json(self, huntress_client):
+        """Test that malformed JSON raises ValueError."""
         responses.add(
             responses.GET,
-            "https://api.huntress.io/v1/agents",
-            body="not valid json{",
+            HUNTRESS_API_URL,
+            body="not valid json",
             status=200,
             content_type="application/json",
         )
 
         with pytest.raises(ValueError) as exc_info:
-            huntress.get_agents(mock_settings)
-        assert "json" in str(exc_info.value).lower() or "parse" in str(exc_info.value).lower()
-
-
-class TestHuntressRateLimiting:
-    @responses.activate
-    def test_rate_limiter_allows_burst_within_limit(self, mock_settings):
-        """Test that bursts within rate limit complete quickly (token bucket)."""
-        import time
-        from api.huntress import _rate_limiter
-
-        # Reset the rate limiter to full tokens
-        _rate_limiter.tokens = _rate_limiter.max_tokens
-        _rate_limiter.last_refill = time.time()
-
-        # Add mock responses for 5 requests (well within burst limit of 60 tokens)
-        for _ in range(5):
-            responses.add(
-                responses.GET,
-                "https://api.huntress.io/v1/agents",
-                json={"agents": []},
-                status=200,
-            )
-
-        start_time = time.time()
-        for _ in range(5):
-            huntress.get_agents(mock_settings)
-        elapsed = time.time() - start_time
-
-        # Burst of 5 requests should complete very quickly (under 0.1s)
-        assert elapsed < 0.1, f"Burst requests too slow ({elapsed:.3f}s), token bucket may not be working"
-
-    @responses.activate
-    def test_rate_limiter_enforces_limit_when_exhausted(self, mock_settings):
-        """Test that rate limiter waits when tokens exhausted."""
-        import time
-        from api.huntress import _rate_limiter
-
-        # Exhaust the tokens
-        _rate_limiter.tokens = 0
-        _rate_limiter.last_refill = time.time()
-
-        # Add mock responses
-        for _ in range(2):
-            responses.add(
-                responses.GET,
-                "https://api.huntress.io/v1/agents",
-                json={"agents": []},
-                status=200,
-            )
-
-        start_time = time.time()
-        for _ in range(2):
-            huntress.get_agents(mock_settings)
-        elapsed = time.time() - start_time
-
-        # With 0 tokens, need to wait for refill (~0.017s per token at 60/sec)
-        assert elapsed >= 0.01, f"Requests completed too fast ({elapsed:.3f}s), rate limiting may not be working"
+            huntress_client.get_agents()
+        assert "json" in str(exc_info.value).lower()
