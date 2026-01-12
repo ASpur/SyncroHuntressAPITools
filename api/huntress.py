@@ -1,5 +1,7 @@
 from typing import Dict, List
+
 from requests.auth import HTTPBasicAuth
+
 from api.base import BaseClient
 from utils.rate_limit import RateLimiter
 
@@ -7,11 +9,12 @@ from utils.rate_limit import RateLimiter
 _rate_limiter = RateLimiter(rate=60.0, name="Huntress API")
 _client = BaseClient(rate_limiter=_rate_limiter)
 
+
 def get_agents(settings: Dict, page: int = 1, limit: int = 500) -> List[Dict]:
     """Get Huntress agents."""
     url = "https://api.huntress.io/v1/agents"
-    
-    auth = HTTPBasicAuth(settings['HuntressAPIKey'], settings['huntressApiSecretKey'])
+
+    auth = HTTPBasicAuth(settings["HuntressAPIKey"], settings["huntressApiSecretKey"])
     params = {"page": page, "limit": limit}
 
     response = _client.request("GET", url, auth=auth, params=params)

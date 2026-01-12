@@ -1,22 +1,22 @@
 """Main application window."""
 
+from PySide6.QtCore import Slot
+from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
+    QLabel,
     QMainWindow,
+    QMessageBox,
+    QProgressBar,
+    QStatusBar,
     QTabWidget,
     QToolBar,
-    QStatusBar,
-    QProgressBar,
-    QLabel,
-    QMessageBox,
 )
-from PySide6.QtGui import QAction
-from PySide6.QtCore import Slot
 
-from gui.widgets.settings_widget import SettingsWidget
+from gui.models.settings_model import SettingsModel
 from gui.widgets.comparison_widget import ComparisonWidget
 from gui.widgets.debug_widget import DebugWidget
 from gui.widgets.export_dialog import ExportDialog
-from gui.models.settings_model import SettingsModel
+from gui.widgets.settings_widget import SettingsWidget
 
 
 class MainWindow(QMainWindow):

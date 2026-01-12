@@ -1,12 +1,14 @@
 import logging
-import time
-from typing import Dict, Optional, Any
+from typing import Optional
+
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+
 from utils.rate_limit import RateLimiter
 
 logger = logging.getLogger(__name__)
+
 
 class BaseClient:
     """Base client for API interactions with common functionality."""
@@ -22,7 +24,7 @@ class BaseClient:
             total=3,
             backoff_factor=1,
             status_forcelist=[429, 500, 502, 503, 504],
-            allowed_methods=["HEAD", "GET", "OPTIONS"]
+            allowed_methods=["HEAD", "GET", "OPTIONS"],
         )
         adapter = HTTPAdapter(max_retries=retry_strategy)
         self.session.mount("https://", adapter)

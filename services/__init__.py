@@ -1,3 +1,3 @@
 from .comparison import ComparisonService
 
-__all__ = ['ComparisonService']
+__all__ = ["ComparisonService"]

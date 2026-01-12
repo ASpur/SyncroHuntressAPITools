@@ -1,6 +1,9 @@
+from unittest.mock import Mock
+
 import pytest
-from unittest.mock import Mock, MagicMock
+
 from services.comparison import ComparisonService, normalize
+
 
 class TestNormalize:
     def test_basic_normalization(self):
@@ -78,7 +81,7 @@ class TestComparisonService:
         syncro.get_all_assets.return_value = [{"name": "Workstation-001"}]
         huntress.get_agents.return_value = [
             {"hostname": "WORKSTATION-001"},
-            {"hostname": "workstation-001"}
+            {"hostname": "workstation-001"},
         ]
 
         result = service.fetch_and_compare()
@@ -91,14 +94,14 @@ class TestComparisonService:
     def test_assets_with_empty_names_ignored(self, service, mock_clients):
         syncro, huntress = mock_clients
         syncro.get_all_assets.return_value = [
-            {"name": ""}, 
-            {"name": None}, 
-            {"name": "VALID-PC"}
+            {"name": ""},
+            {"name": None},
+            {"name": "VALID-PC"},
         ]
         huntress.get_agents.return_value = [
-            {"hostname": ""}, 
-            {"hostname": None}, 
-            {"hostname": "VALID-PC"}
+            {"hostname": ""},
+            {"hostname": None},
+            {"hostname": "VALID-PC"},
         ]
 
         result = service.fetch_and_compare()

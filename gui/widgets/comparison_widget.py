@@ -1,22 +1,22 @@
 """Main comparison view widget."""
 
-from typing import List, Tuple, Optional
+from typing import List, Optional, Tuple
 
-from PySide6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QTableView,
-    QPushButton,
-    QComboBox,
-    QLineEdit,
-    QLabel,
-    QHeaderView,
-)
 from PySide6.QtCore import Signal, Slot
+from PySide6.QtWidgets import (
+    QComboBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QTableView,
+    QVBoxLayout,
+    QWidget,
+)
 
+from gui.models.comparison_model import ComparisonFilterProxyModel, ComparisonTableModel
 from gui.models.settings_model import SettingsModel
-from gui.models.comparison_model import ComparisonTableModel, ComparisonFilterProxyModel
 from gui.workers.comparison_worker import ComparisonWorker
 
 
@@ -48,7 +48,9 @@ class ComparisonWidget(QWidget):
 
         controls_layout.addWidget(QLabel("Filter:"))
         self.filter_combo = QComboBox()
-        self.filter_combo.addItems(["All", "Not OK", "OK!", "Missing in Huntress", "Missing in Syncro"])
+        self.filter_combo.addItems(
+            ["All", "Not OK", "OK!", "Missing in Huntress", "Missing in Syncro"]
+        )
         self.filter_combo.currentTextChanged.connect(self._on_filter_changed)
         controls_layout.addWidget(self.filter_combo)
 

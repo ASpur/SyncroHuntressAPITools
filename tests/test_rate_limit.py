@@ -1,5 +1,6 @@
 import time
-import pytest
+
+
 from utils.rate_limit import RateLimiter
 
 
