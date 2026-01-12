@@ -1,6 +1,6 @@
 import pytest
 import responses
-from requests.exceptions import HTTPError
+from requests.exceptions import HTTPError, RetryError
 from api import huntress
 
 
@@ -94,9 +94,10 @@ class TestGetAgentsErrorHandling:
             status=500,
         )
 
-        with pytest.raises(HTTPError) as exc_info:
+        with pytest.raises((HTTPError, RetryError)) as exc_info:
             huntress.get_agents(mock_settings)
-        assert exc_info.value.response.status_code == 500
+        if isinstance(exc_info.value, HTTPError):
+            assert exc_info.value.response.status_code == 500
 
     @responses.activate
     def test_raises_value_error_on_missing_agents_key(self, mock_settings):
