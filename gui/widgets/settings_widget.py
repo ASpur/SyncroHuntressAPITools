@@ -141,9 +141,7 @@ class SettingsWidget(QWidget):
         self.syncro_subdomain.setText(self.settings_model.get("SyncroSubDomain", ""))
         self.syncro_api_key.setText(self.settings_model.get("SyncroAPIKey", ""))
         self.huntress_api_key.setText(self.settings_model.get("HuntressAPIKey", ""))
-        self.huntress_secret.setText(
-            self.settings_model.get("HuntressSecretKey", "")
-        )
+        self.huntress_secret.setText(self.settings_model.get("HuntressSecretKey", ""))
         self.debug_checkbox.setChecked(self.settings_model.get("Debug", False))
         self.status_label.setText("")
 

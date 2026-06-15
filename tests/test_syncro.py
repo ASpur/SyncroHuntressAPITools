@@ -1,6 +1,7 @@
 import pytest
 import responses
 from requests.exceptions import HTTPError, RetryError
+
 from api.client import SyncroClient
 
 

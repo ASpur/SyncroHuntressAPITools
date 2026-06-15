@@ -33,8 +33,50 @@ def create_parser():
     parser.add_argument(
         "--no-color", action="store_true", help="Disable colored output"
     )
+    parser.add_argument(
+        "--org",
+        metavar="NAME",
+        action="append",
+        default=[],
+        help="Show only this organization (repeatable)",
+    )
+    parser.add_argument(
+        "--exclude-org",
+        metavar="NAME",
+        action="append",
+        default=[],
+        help="Hide this organization (repeatable)",
+    )
+    parser.add_argument(
+        "--show-ignored",
+        action="store_true",
+        help="Include ignored assets in the output",
+    )
 
     return parser
+
+
+def _apply_filters(rows, args, settings):
+    """Apply org include/exclude and ignore filters to comparison rows."""
+    from services.comparison import row_key
+
+    include = {o for o in args.org}
+    exclude = {o for o in args.exclude_org} | set(
+        settings.get("ExcludedOrganizations", [])
+    )
+    ignored_keys = set(settings.get("IgnoredAssets", []))
+
+    filtered = []
+    for row in rows:
+        if include and row.organization not in include:
+            continue
+        if row.organization in exclude:
+            continue
+        if not args.show_ignored and row_key(row) in ignored_keys:
+            continue
+        filtered.append(row)
+
+    return filtered, ignored_keys
 
 
 def main():
@@ -73,17 +115,21 @@ def main():
                 with open("debug/agentDumpHuntress.json", "w") as f:
                     json.dump(result.huntress_agents, f, indent=4)
 
+            # Apply org/ignore filters
+            rows, ignored_keys = _apply_filters(result.rows, args, settings)
+
             # Output Results
             if args.output:
                 try:
                     if args.format == "csv":
-                        write_csv(args.output, result.rows)
+                        write_csv(args.output, rows, ignored_keys)
                     elif args.format == "ascii":
                         write_ascii_table(
                             args.output,
-                            result.rows,
+                            rows,
                             result.syncro_count,
                             result.huntress_count,
+                            ignored_keys=ignored_keys,
                         )
                     console.print(f"[green]Results written to {args.output}[/green]")
                 except Exception as e:
@@ -94,10 +140,11 @@ def main():
 
             # Print to console
             print_colored_table(
-                result.rows,
+                rows,
                 not args.no_color,
                 result.syncro_count,
                 result.huntress_count,
+                ignored_keys=ignored_keys,
             )
 
         except Exception as e:

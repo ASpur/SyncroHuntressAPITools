@@ -37,10 +37,16 @@ Then edit `settings.json` with your credentials:
     "SyncroAPIKey": "your-syncro-api-key",
     "SyncroSubDomain": "your-subdomain",
     "HuntressAPIKey": "your-huntress-api-key",
-    "huntressApiSecretKey": "your-huntress-secret-key",
-    "debug": false
+    "HuntressSecretKey": "your-huntress-secret-key",
+    "Debug": false
 }
 ```
+
+The tool also manages two list-valued keys automatically: `IgnoredAssets`
+(normalized hostnames hidden from mismatch counts) and `ExcludedOrganizations`
+(organizations hidden from results). You normally edit these through the GUI
+(right-click a row to ignore it; use the **Organizations** button to filter),
+but they can be edited by hand as well.
 
 ## Usage
 Launch GUI:
@@ -60,6 +66,9 @@ python main.py --compare
 | `-o FILE`, `--output FILE` | Output results to a file |
 | `-f FORMAT`, `--format FORMAT` | Output file format: `csv` or `ascii` (default: csv) |
 | `--no-color` | Disable colored output |
+| `--org NAME` | Show only this organization (repeatable) |
+| `--exclude-org NAME` | Hide this organization (repeatable) |
+| `--show-ignored` | Include ignored assets in the output |
 
 ### Examples
 

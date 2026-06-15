@@ -1,7 +1,10 @@
 from unittest.mock import Mock, patch
-from PySide6.QtCore import QCoreApplication
+
 import pytest
+from PySide6.QtCore import QCoreApplication
+
 from gui.workers.comparison_worker import ComparisonWorker
+
 
 @pytest.fixture(scope="session")
 def qapp():
@@ -10,6 +13,7 @@ def qapp():
         app = QCoreApplication([])
     return app
 
+
 class TestComparisonWorker:
     @pytest.fixture
     def mock_settings(self):
@@ -17,7 +21,7 @@ class TestComparisonWorker:
             "SyncroAPIKey": "syncro_key",
             "SyncroSubDomain": "syncro_sub",
             "HuntressAPIKey": "huntress_key",
-            "HuntressSecretKey": "huntress_secret"
+            "HuntressSecretKey": "huntress_secret",
         }
 
     @pytest.fixture
@@ -27,7 +31,9 @@ class TestComparisonWorker:
     @patch("gui.workers.comparison_worker.SyncroClient")
     @patch("gui.workers.comparison_worker.HuntressClient")
     @patch("gui.workers.comparison_worker.ComparisonService")
-    def test_run_success_emits_signals(self, mock_service_cls, mock_huntress_cls, mock_syncro_cls, worker):
+    def test_run_success_emits_signals(
+        self, mock_service_cls, mock_huntress_cls, mock_syncro_cls, worker
+    ):
         """Test that run executes successfully and emits results."""
         # Setup mocks
         mock_service = mock_service_cls.return_value
@@ -38,8 +44,14 @@ class TestComparisonWorker:
         mock_service.fetch_and_compare.return_value = result_mock
 
         # Track signals
-        signals = {"progress": [], "result": [], "raw_data": [], "finished": False, "error": []}
-        
+        signals = {
+            "progress": [],
+            "result": [],
+            "raw_data": [],
+            "finished": False,
+            "error": [],
+        }
+
         worker.progress.connect(signals["progress"].append)
         worker.result.connect(signals["result"].append)
         worker.raw_data.connect(signals["raw_data"].append)
@@ -51,7 +63,7 @@ class TestComparisonWorker:
 
         # Verify
         assert len(signals["result"]) == 1
-        # PySide6 signals might convert tuples to lists, so we check content recursively or cast
+        # PySide6 signals may convert tuples to lists, so compare content.
         # result was [("Asset", "Agent", "OK")]
         # signal might be [[ 'Asset', 'Agent', 'OK' ]]
         result_rows = signals["result"][0]
@@ -65,7 +77,9 @@ class TestComparisonWorker:
 
         # Verify calls
         mock_syncro_cls.assert_called_with(api_key="syncro_key", subdomain="syncro_sub")
-        mock_huntress_cls.assert_called_with(api_key="huntress_key", secret_key="huntress_secret")
+        mock_huntress_cls.assert_called_with(
+            api_key="huntress_key", secret_key="huntress_secret"
+        )
         mock_service.fetch_and_compare.assert_called_once()
 
     @patch("gui.workers.comparison_worker.SyncroClient")
@@ -75,7 +89,9 @@ class TestComparisonWorker:
 
         errors = []
         worker.error.connect(errors.append)
-        worker.finished_work.connect(lambda: pytest.fail("Should not finish successfully"))
+        worker.finished_work.connect(
+            lambda: pytest.fail("Should not finish successfully")
+        )
 
         worker.run()
 
@@ -85,32 +101,34 @@ class TestComparisonWorker:
     @patch("gui.workers.comparison_worker.SyncroClient")
     @patch("gui.workers.comparison_worker.HuntressClient")
     @patch("gui.workers.comparison_worker.ComparisonService")
-    def test_cancel_stops_execution(self, mock_service_cls, mock_huntress_cls, mock_syncro_cls, worker):
+    def test_cancel_stops_execution(
+        self, mock_service_cls, mock_huntress_cls, mock_syncro_cls, worker
+    ):
         """Test that cancellation stops execution."""
         # Cancel before run
         worker.cancel()
-        
+
         results = []
         worker.result.connect(results.append)
-        
+
         worker.run()
-        
+
         # Should not have produced results
         assert len(results) == 0
-        # Service might be init but fetch should be skipped or partially skipped depending on check placement
+        # Service may be initialized, but fetch should be skipped on cancel.
         # The code checks cancelled after client init and before fetch?
-        # Let's check code: 
+        # Let's check code:
         #   Init clients...
         #   Init Service...
         #   Check cancelled
         #   Fetch...
-        
+
         # If cancelled before run, it should check it.
         # But wait, logic is:
         #   ...
         #   service = ...
         #   if self._is_cancelled: return
-        
+
         # So service IS instantiated.
         assert mock_service_cls.called
         # But fetch_and_compare should NOT be called?
@@ -119,5 +137,5 @@ class TestComparisonWorker:
         #   if self._is_cancelled: return
         #   ...
         #   service.fetch_and_compare(...)
-        
+
         mock_service_cls.return_value.fetch_and_compare.assert_not_called()

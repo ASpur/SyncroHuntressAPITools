@@ -1,6 +1,9 @@
+import copy
 import json
 from pathlib import Path
 from typing import Any, Dict
+
+from const import DEFAULT_SETTINGS, REQUIRED_SETTINGS
 
 
 class ConfigurationError(Exception):
@@ -21,13 +24,7 @@ def load_settings(path: str = "settings.json") -> Dict[str, Any]:
     """
     settings_path = Path(path)
 
-    default_settings = {
-        "SyncroAPIKey": "",
-        "SyncroSubDomain": "",
-        "HuntressAPIKey": "",
-        "HuntressSecretKey": "",
-        "Debug": False,
-    }
+    default_settings = copy.deepcopy(DEFAULT_SETTINGS)
 
     if not settings_path.exists():
         try:
@@ -44,7 +41,7 @@ def load_settings(path: str = "settings.json") -> Dict[str, Any]:
 
     # Migration: Check for old keys and migrate to new keys
     migrations_needed = False
-    
+
     # huntressApiSecretKey -> HuntressSecretKey
     if "huntressApiSecretKey" in settings:
         if not settings.get("HuntressSecretKey"):  # Only if new key not already set
@@ -79,13 +76,9 @@ def load_settings(path: str = "settings.json") -> Dict[str, Any]:
 
     # Validate required fields
     missing_fields = []
-    for key, value in final_settings.items():
-        if (
-            key in default_settings
-            and isinstance(value, str)
-            and not value
-            and key != "Debug"
-        ):
+    for key in REQUIRED_SETTINGS:
+        value = final_settings.get(key, "")
+        if not isinstance(value, str) or not value.strip():
             missing_fields.append(key)
 
     if missing_fields:

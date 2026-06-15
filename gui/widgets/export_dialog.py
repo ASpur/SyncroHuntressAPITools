@@ -1,6 +1,6 @@
 """Export dialog for saving comparison results."""
 
-from typing import List, Tuple
+from typing import List, Optional, Set
 
 from PySide6.QtCore import Slot
 from PySide6.QtWidgets import (
@@ -17,15 +17,23 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from const import STATUS_OK
+from services.comparison import ComparisonRow
 from utils.output import write_ascii_table, write_csv
 
 
 class ExportDialog(QDialog):
     """Dialog for exporting comparison results to file."""
 
-    def __init__(self, results: List[Tuple[str, str, str]], parent=None):
+    def __init__(
+        self,
+        results: List[ComparisonRow],
+        ignored_keys: Optional[Set[str]] = None,
+        parent=None,
+    ):
         super().__init__(parent)
         self.results = results
+        self.ignored_keys = ignored_keys or set()
         self.setWindowTitle("Export Results")
         self.setMinimumWidth(400)
         self._setup_ui()
@@ -69,7 +77,7 @@ class ExportDialog(QDialog):
 
         # Summary
         total = len(self.results)
-        issues = sum(1 for r in self.results if r[2] != "OK!")
+        issues = sum(1 for r in self.results if r.status != STATUS_OK)
         self.summary_label = QPushButton(
             f"Ready to export {total} rows ({issues} issues)"
         )
@@ -124,7 +132,7 @@ class ExportDialog(QDialog):
         # Filter results if needed
         results = self.results
         if self.only_issues_checkbox.isChecked():
-            results = [r for r in results if r[2] != "OK!"]
+            results = [r for r in results if r.status != STATUS_OK]
 
         if not results:
             QMessageBox.warning(
@@ -135,9 +143,9 @@ class ExportDialog(QDialog):
         try:
             format_text = self.format_combo.currentText()
             if format_text == "CSV":
-                write_csv(file_path, results)
+                write_csv(file_path, results, self.ignored_keys)
             else:
-                write_ascii_table(file_path, results)
+                write_ascii_table(file_path, results, ignored_keys=self.ignored_keys)
 
             QMessageBox.information(
                 self,

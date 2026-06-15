@@ -173,7 +173,11 @@ class MainWindow(QMainWindow):
             )
             return
 
-        dialog = ExportDialog(self.comparison_widget.get_results(), self)
+        dialog = ExportDialog(
+            self.comparison_widget.get_results(),
+            self.settings_model.get_ignored(),
+            self,
+        )
         dialog.exec()
 
     @Slot()
