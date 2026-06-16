@@ -1,11 +1,13 @@
 """Table model for comparison results."""
 
-from typing import List, Optional, Set
+from typing import Dict, List, Optional, Set
 
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, QSortFilterProxyModel, Qt
-from PySide6.QtGui import QColor, QFont
+from PySide6.QtGui import QFont, QPixmap
 
 from const import STATUS_MISSING_HUNTRESS, STATUS_MISSING_SYNCRO, STATUS_OK
+from gui.theme import Theme
+from gui.theme.theme import dot_pixmap
 from services.comparison import ComparisonRow, row_key
 
 # Column indices (single source of truth for ordering).
@@ -14,7 +16,12 @@ COL_SYNCRO = 1
 COL_HUNTRESS = 2
 COL_STATUS = 3
 
-_IGNORED_FOREGROUND = QColor(150, 150, 150)
+# Status -> theme token for the status dot drawn in the Status column.
+STATUS_TOKENS = {
+    STATUS_OK: "status_ok",
+    STATUS_MISSING_HUNTRESS: "status_missing_huntress",
+    STATUS_MISSING_SYNCRO: "status_missing_syncro",
+}
 
 __all__ = [
     "COL_ORG",
@@ -31,16 +38,30 @@ class ComparisonTableModel(QAbstractTableModel):
     """Table model for displaying comparison results."""
 
     HEADERS = ["Organization", "Syncro Asset", "Huntress Asset", "Status"]
-    STATUS_BACKGROUNDS = {
-        STATUS_OK: QColor(200, 240, 200),  # Green background
-        STATUS_MISSING_HUNTRESS: QColor(255, 200, 200),  # Red background
-        STATUS_MISSING_SYNCRO: QColor(255, 200, 200),  # Red background
-    }
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._data: List[ComparisonRow] = []
         self._ignored: Set[str] = set()
+        self._dots: Dict[str, QPixmap] = {}
+        # Repaint status dots / ignored dimming when the OS theme flips.
+        Theme.instance().changed.connect(self._on_theme_changed)
+
+    def _dot_for(self, status: str) -> Optional[QPixmap]:
+        """Return a cached, palette-colored status dot (or None)."""
+        token = STATUS_TOKENS.get(status)
+        if token is None:
+            return None
+        if status not in self._dots:
+            self._dots[status] = dot_pixmap(token)
+        return self._dots[status]
+
+    def _on_theme_changed(self):
+        self._dots.clear()
+        if self._data:
+            top = self.index(0, 0)
+            bottom = self.index(len(self._data) - 1, self.columnCount() - 1)
+            self.dataChanged.emit(top, bottom)
 
     def rowCount(self, parent=QModelIndex()):
         return len(self._data)
@@ -67,13 +88,12 @@ class ComparisonTableModel(QAbstractTableModel):
         if role == Qt.DisplayRole:
             return self._cell(row, index.column())
 
-        if role == Qt.BackgroundRole:
-            if ignored:
-                return None  # Keep ignored rows visually muted, not status-colored
-            return self.STATUS_BACKGROUNDS.get(row.status)
+        if role == Qt.DecorationRole and index.column() == COL_STATUS and not ignored:
+            return self._dot_for(row.status)
 
-        if role == Qt.ForegroundRole:
-            return _IGNORED_FOREGROUND if ignored else QColor(0, 0, 0)
+        if role == Qt.ForegroundRole and ignored:
+            # Dim ignored rows; normal rows inherit the palette text color.
+            return Theme.instance().color("ignored_fg")
 
         if role == Qt.FontRole and ignored:
             font = QFont()
@@ -139,10 +159,16 @@ class ComparisonFilterProxyModel(QSortFilterProxyModel):
         self._status_filter = ""  # Empty means all
         self._search_text = ""
         self._excluded_orgs: Set[str] = set()
+        self._only_ignored = False
 
     def set_status_filter(self, status: str):
         """Set the status filter (empty string for all, 'Not OK' for issues only)."""
         self._status_filter = status
+        self.invalidateFilter()
+
+    def set_only_ignored(self, only_ignored: bool):
+        """When True, show only ignored rows (for the Ignored stat card)."""
+        self._only_ignored = only_ignored
         self.invalidateFilter()
 
     def set_search_text(self, text: str):
@@ -169,6 +195,11 @@ class ComparisonFilterProxyModel(QSortFilterProxyModel):
         # Hide excluded organizations
         if org in self._excluded_orgs:
             return False
+
+        # Ignored-only view (Ignored stat card) overrides the status filter.
+        if self._only_ignored:
+            if not model.is_source_row_ignored(source_row):
+                return False
 
         # Check status filter
         if self._status_filter:

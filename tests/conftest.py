@@ -1,4 +1,20 @@
+import os
+
 import pytest
+
+# GUI tests need a real QApplication; force the headless platform before Qt loads.
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+
+@pytest.fixture(scope="session")
+def qapp():
+    """A single shared QApplication for all GUI tests (and the worker test)."""
+    from PySide6.QtWidgets import QApplication
+
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication([])
+    return app
 
 
 @pytest.fixture

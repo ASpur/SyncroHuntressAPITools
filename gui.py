@@ -6,12 +6,15 @@ import sys
 from PySide6.QtWidgets import QApplication
 
 from gui.main_window import MainWindow
+from gui.theme import Theme
 
 
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName("Syncro Huntress Comparison Tool")
     app.setOrganizationName("SyncroHuntressAPITools")
+
+    Theme.instance().apply(app)
 
     window = MainWindow()
     window.show()

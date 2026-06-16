@@ -1,17 +1,8 @@
 from unittest.mock import Mock, patch
 
 import pytest
-from PySide6.QtCore import QCoreApplication
 
 from gui.workers.comparison_worker import ComparisonWorker
-
-
-@pytest.fixture(scope="session")
-def qapp():
-    app = QCoreApplication.instance()
-    if app is None:
-        app = QCoreApplication([])
-    return app
 
 
 class TestComparisonWorker:
