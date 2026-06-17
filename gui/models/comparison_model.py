@@ -156,18 +156,19 @@ class ComparisonFilterProxyModel(QSortFilterProxyModel):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._status_filter = ""  # Empty means all
+        self._statuses: Set[str] = set()  # Empty means show every status
         self._search_text = ""
         self._excluded_orgs: Set[str] = set()
         self._only_ignored = False
 
-    def set_status_filter(self, status: str):
-        """Set the status filter (empty string for all, 'Not OK' for issues only)."""
-        self._status_filter = status
+    def set_status_filter(self, statuses):
+        """Show only rows whose status is in ``statuses`` (an iterable of status
+        strings). An empty set shows every status."""
+        self._statuses = set(statuses)
         self.invalidateFilter()
 
     def set_only_ignored(self, only_ignored: bool):
-        """When True, show only ignored rows (for the Ignored stat card)."""
+        """When True, show only ignored rows (for the low-weight Ignored view)."""
         self._only_ignored = only_ignored
         self.invalidateFilter()
 
@@ -196,18 +197,14 @@ class ComparisonFilterProxyModel(QSortFilterProxyModel):
         if org in self._excluded_orgs:
             return False
 
-        # Ignored-only view (Ignored stat card) overrides the status filter.
+        # Ignored-only view overrides the status filter.
         if self._only_ignored:
             if not model.is_source_row_ignored(source_row):
                 return False
 
-        # Check status filter
-        if self._status_filter:
-            if self._status_filter == "Not OK":
-                if status == STATUS_OK:
-                    return False
-            elif status != self._status_filter:
-                return False
+        # Check status filter (union of selected statuses; empty = show all).
+        if self._statuses and status not in self._statuses:
+            return False
 
         # Check search text (org, syncro and huntress names)
         if self._search_text:

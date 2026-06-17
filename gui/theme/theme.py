@@ -28,6 +28,33 @@ QLabel { background: transparent; }
 QLabel[role="muted"] { color: $text_secondary; }
 QLabel[role="hint"] { color: $text_tertiary; }
 QLabel[role="error"] { color: $status_missing_huntress; }
+QLabel[role="heroTitle"] { font-size: 19px; font-weight: 500; color: $text_primary; }
+QLabel[role="heroGlyph"] { font-size: 24px; color: $text_secondary; }
+
+QFrame[role="heroMark"] {
+    background: $bg_secondary;
+    border: 1px solid $border;
+    border-radius: 14px;
+}
+QFrame[role="pill"] {
+    background: $bg_secondary;
+    border: 1px solid $border;
+    border-radius: 12px;
+}
+QFrame[role="pill"] QLabel { background: transparent; color: $text_secondary; }
+
+QFrame[role="busyButton"] {
+    background: $bg_secondary;
+    border: 1px solid $border;
+    border-radius: 6px;
+}
+QLabel[role="busyLabel"] {
+    background: transparent;
+    color: $text_tertiary;
+    font-weight: 500;
+}
+
+Spinner { background: transparent; }
 
 QPushButton {
     background: transparent;
@@ -60,6 +87,14 @@ QToolButton {
 }
 QToolButton:hover { background: $hover; }
 QToolButton::menu-indicator { image: none; }
+QToolButton[variant="link"] {
+    background: transparent;
+    color: $text_tertiary;
+    border: none;
+    padding: 5px 6px;
+}
+QToolButton[variant="link"]:hover { color: $text_secondary; }
+QToolButton[variant="link"][active="true"] { color: $accent; }
 
 QLineEdit {
     background: $bg_primary;
@@ -84,7 +119,23 @@ QComboBox QAbstractItemView {
     selection-color: $text_primary;
 }
 
-QCheckBox { spacing: 8px; }
+QCheckBox { spacing: 8px; background: transparent; }
+QCheckBox::indicator {
+    width: 16px;
+    height: 16px;
+    border: 1px solid $border_strong;
+    border-radius: 4px;
+    background: $bg_primary;
+}
+QCheckBox::indicator:hover { border-color: $accent; }
+QCheckBox::indicator:checked { background: $accent; border-color: $accent; }
+QCheckBox::indicator:disabled { border-color: $border; background: $bg_secondary; }
+
+QLabel[role="sectionHeader"] {
+    color: $text_secondary;
+    font-size: 11px;
+    font-weight: 600;
+}
 
 QTableView {
     background: $bg_primary;

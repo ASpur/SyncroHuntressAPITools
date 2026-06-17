@@ -5,6 +5,7 @@ from typing import Dict, List, Optional
 
 from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtWidgets import (
+    QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -26,7 +27,9 @@ from gui.models.comparison_model import (
     row_key,
 )
 from gui.models.settings_model import SettingsModel
+from gui.theme.theme import Theme, dot_pixmap
 from gui.widgets.org_filter_dialog import OrgFilterDialog
+from gui.widgets.spinner import Spinner
 from gui.widgets.stat_card import StatCard
 from gui.workers.comparison_worker import ComparisonWorker
 from services.comparison import ComparisonRow
@@ -35,18 +38,24 @@ from services.comparison import ComparisonRow
 PAGE_EMPTY = 0
 PAGE_RESULTS = 1
 
-# Default filter: surface problems first. Not a stat card, so no card highlights.
-DEFAULT_FILTER = "issues"
-
-# filter key -> (proxy status filter, ignored-only, status-strip label)
-FILTERS: Dict[str, tuple] = {
-    "issues": ("Not OK", False, "issues"),
-    "all": ("", False, "all"),
-    "ok": (STATUS_OK, False, "OK"),
-    "missing_huntress": (STATUS_MISSING_HUNTRESS, False, "missing in Huntress"),
-    "missing_syncro": (STATUS_MISSING_SYNCRO, False, "missing in Syncro"),
-    "ignored": ("", True, "ignored"),
+# Status stat-card key -> the status string it selects. These cards multi-select:
+# the table shows the union of the selected statuses. "Total" is not in here — it
+# clears the selection (shows everything).
+STATUS_CARD_KEYS: Dict[str, str] = {
+    "ok": STATUS_OK,
+    "missing_huntress": STATUS_MISSING_HUNTRESS,
+    "missing_syncro": STATUS_MISSING_SYNCRO,
 }
+
+# Human labels for the status strip, in display order.
+FILTER_LABELS: Dict[str, str] = {
+    "ok": "OK",
+    "missing_huntress": "missing in Huntress",
+    "missing_syncro": "missing in Syncro",
+}
+
+# Default view: surface problems first (both "missing" statuses selected).
+DEFAULT_SELECTION = frozenset({"missing_huntress", "missing_syncro"})
 
 
 class ComparisonWidget(QWidget):
@@ -57,13 +66,10 @@ class ComparisonWidget(QWidget):
     progress_updated = Signal(str)
     error_occurred = Signal(str)
     raw_data_received = Signal(dict)
-    # Chrome actions handled by the main window (dialogs / about / clear).
+    # Chrome actions handled by the main window.
     settings_requested = Signal()
     settings_invalid = Signal(list)
     export_requested = Signal()
-    clear_requested = Signal()
-    debug_requested = Signal()
-    about_requested = Signal()
 
     def __init__(self, settings_model: SettingsModel, parent=None):
         super().__init__(parent)
@@ -72,7 +78,10 @@ class ComparisonWidget(QWidget):
         self._all_orgs: List[str] = []
         self._raw_data: dict = {}
         self._cards: Dict[str, StatCard] = {}
-        self._active_filter = DEFAULT_FILTER
+        # Selected status-card keys (union filter); empty == show all (Total).
+        self._selected: set = set(DEFAULT_SELECTION)
+        self._only_ignored = False
+        self._ignored_count = 0
         self._setup_ui()
 
     def _setup_ui(self):
@@ -87,35 +96,131 @@ class ComparisonWidget(QWidget):
     # ----- Empty state -----
 
     def _build_empty_page(self) -> QWidget:
+        """Status hero: a value-prop headline, live connection pills for each
+        platform, and the primary Run action. The pills surface setup readiness
+        before the user clicks Run, and refresh on settings/theme changes."""
         page = QWidget()
-        layout = QVBoxLayout(page)
-        layout.addStretch()
+        outer = QVBoxLayout(page)
+        outer.addStretch()
 
-        self.run_btn_big = QPushButton("Run Comparison")
+        content = QWidget()
+        content.setMaximumWidth(440)
+        col = QVBoxLayout(content)
+        col.setSpacing(16)
+        col.setAlignment(Qt.AlignCenter)
+
+        mark = QFrame()
+        mark.setProperty("role", "heroMark")
+        mark.setFixedSize(52, 52)
+        mark_layout = QVBoxLayout(mark)
+        mark_layout.setContentsMargins(0, 0, 0, 0)
+        glyph = QLabel("⇄")
+        glyph.setAlignment(Qt.AlignCenter)
+        glyph.setProperty("role", "heroGlyph")
+        mark_layout.addWidget(glyph)
+        col.addWidget(mark, alignment=Qt.AlignCenter)
+
+        title = QLabel("Find the gaps between platforms")
+        title.setAlignment(Qt.AlignCenter)
+        title.setProperty("role", "heroTitle")
+        col.addWidget(title)
+
+        self._empty_subtitle_default = (
+            "Compare Syncro assets against Huntress agents to spot machines "
+            "missing from either side."
+        )
+        self.empty_subtitle = QLabel(self._empty_subtitle_default)
+        self.empty_subtitle.setAlignment(Qt.AlignCenter)
+        self.empty_subtitle.setWordWrap(True)
+        self.empty_subtitle.setProperty("role", "hint")
+        col.addWidget(self.empty_subtitle)
+
+        pills_row = QHBoxLayout()
+        pills_row.setSpacing(10)
+        pills_row.addStretch()
+        self._syncro_pill = self._make_status_pill()
+        self._huntress_pill = self._make_status_pill()
+        pills_row.addWidget(self._syncro_pill[0])
+        pills_row.addWidget(self._huntress_pill[0])
+        pills_row.addStretch()
+        col.addLayout(pills_row)
+
+        self.run_btn_big = QPushButton("Run comparison")
         self.run_btn_big.setProperty("variant", "primary")
-        self.run_btn_big.setMinimumSize(240, 56)
+        self.run_btn_big.setMinimumSize(220, 48)
         self.run_btn_big.clicked.connect(self.run_comparison)
-        btn_row = QHBoxLayout()
-        btn_row.addStretch()
-        btn_row.addWidget(self.run_btn_big)
-        btn_row.addStretch()
-        layout.addLayout(btn_row)
+        col.addWidget(self.run_btn_big, alignment=Qt.AlignCenter)
 
-        hint = QLabel("Compare Syncro assets against Huntress agents to find gaps.")
-        hint.setAlignment(Qt.AlignCenter)
-        hint.setProperty("role", "hint")
-        layout.addWidget(hint)
+        # Busy indicator shown in the button's place while a comparison runs.
+        self._empty_busy = QFrame()
+        self._empty_busy.setProperty("role", "busyButton")
+        self._empty_busy.setMinimumSize(220, 48)
+        busy_layout = QHBoxLayout(self._empty_busy)
+        busy_layout.setContentsMargins(26, 0, 26, 0)
+        busy_layout.setSpacing(10)
+        busy_layout.addStretch()
+        self._empty_spinner = Spinner(16)
+        busy_layout.addWidget(self._empty_spinner)
+        busy_label = QLabel("Running…")
+        busy_label.setProperty("role", "busyLabel")
+        busy_layout.addWidget(busy_label)
+        busy_layout.addStretch()
+        self._empty_busy.setVisible(False)
+        col.addWidget(self._empty_busy, alignment=Qt.AlignCenter)
 
-        settings_row = QHBoxLayout()
-        settings_row.addStretch()
-        settings_btn = QPushButton("Open settings")
+        settings_btn = QPushButton("Settings")
         settings_btn.clicked.connect(self.settings_requested)
-        settings_row.addWidget(settings_btn)
-        settings_row.addStretch()
-        layout.addLayout(settings_row)
+        col.addWidget(settings_btn, alignment=Qt.AlignCenter)
 
-        layout.addStretch()
+        center = QHBoxLayout()
+        center.addStretch()
+        center.addWidget(content)
+        center.addStretch()
+        outer.addLayout(center)
+
+        outer.addStretch()
+
+        Theme.instance().changed.connect(self._refresh_connection_status)
+        self.settings_model.settings_changed.connect(self._refresh_connection_status)
+        self._refresh_connection_status()
         return page
+
+    def _make_status_pill(self) -> tuple:
+        """Build a connection pill. Returns ``(frame, dot_label, text_label)``;
+        the dot pixmap and text are filled in by ``_refresh_connection_status``."""
+        pill = QFrame()
+        pill.setProperty("role", "pill")
+        layout = QHBoxLayout(pill)
+        layout.setContentsMargins(12, 5, 12, 5)
+        layout.setSpacing(7)
+        dot = QLabel()
+        text = QLabel()
+        layout.addWidget(dot)
+        layout.addWidget(text)
+        return pill, dot, text
+
+    @Slot()
+    def _refresh_connection_status(self):
+        """Repaint both pills from current credentials. Green dot = configured,
+        amber dot = needs API keys (mirrors the table's status-dot scheme)."""
+        s = self.settings_model
+        syncro_ok = bool(
+            (s.get("SyncroAPIKey") or "").strip()
+            and (s.get("SyncroSubDomain") or "").strip()
+        )
+        huntress_ok = bool(
+            (s.get("HuntressAPIKey") or "").strip()
+            and (s.get("HuntressSecretKey") or "").strip()
+        )
+        self._set_pill(self._syncro_pill, "Syncro", syncro_ok)
+        self._set_pill(self._huntress_pill, "Huntress", huntress_ok)
+
+    @staticmethod
+    def _set_pill(pill: tuple, name: str, ok: bool):
+        _, dot, text = pill
+        token = "status_ok" if ok else "status_missing_syncro"
+        dot.setPixmap(dot_pixmap(token))
+        text.setText(f"{name} connected" if ok else f"{name} — add API keys")
 
     # ----- Results state -----
 
@@ -159,13 +264,6 @@ class ComparisonWidget(QWidget):
         gear_btn.clicked.connect(self.settings_requested)
         bar.addWidget(gear_btn)
 
-        overflow_btn = QToolButton()
-        overflow_btn.setText("⋯")
-        overflow_btn.setToolTip("More")
-        overflow_btn.setPopupMode(QToolButton.InstantPopup)
-        overflow_btn.setMenu(self._build_overflow_menu())
-        bar.addWidget(overflow_btn)
-
         self.rerun_btn = QPushButton("Rerun")
         self.rerun_btn.setProperty("variant", "primary")
         self.rerun_btn.clicked.connect(self.run_comparison)
@@ -173,23 +271,13 @@ class ComparisonWidget(QWidget):
 
         return bar
 
-    def _build_overflow_menu(self) -> QMenu:
-        menu = QMenu(self)
-        menu.addAction("Export results…", self.export_requested.emit)
-        menu.addAction("Clear results", self.clear_requested.emit)
-        menu.addSeparator()
-        menu.addAction("Debug data…", self.debug_requested.emit)
-        menu.addAction("About", self.about_requested.emit)
-        return menu
-
     def _build_stat_cards(self) -> QHBoxLayout:
         row = QHBoxLayout()
         specs = [
-            ("all", "Total", None),
+            ("total", "Total", None),
             ("ok", "OK", "status_ok"),
             ("missing_huntress", "Missing in Huntress", "status_missing_huntress"),
             ("missing_syncro", "Missing in Syncro", "status_missing_syncro"),
-            ("ignored", "Ignored", None),
         ]
         for key, label, dot in specs:
             card = StatCard(key, label, dot)
@@ -234,6 +322,16 @@ class ComparisonWidget(QWidget):
         strip.addWidget(self.progress_bar)
 
         strip.addStretch()
+
+        # Low-weight ignored entry point: a quiet link that toggles the
+        # ignored-only view. Hidden when nothing is ignored.
+        self.ignored_btn = QToolButton()
+        self.ignored_btn.setProperty("variant", "link")
+        self.ignored_btn.setCursor(Qt.PointingHandCursor)
+        self.ignored_btn.setVisible(False)
+        self.ignored_btn.clicked.connect(self._toggle_ignored_view)
+        strip.addWidget(self.ignored_btn)
+
         export_btn = QToolButton()
         export_btn.setText("Export")
         export_btn.clicked.connect(self.export_requested)
@@ -242,6 +340,19 @@ class ComparisonWidget(QWidget):
 
     def _set_running(self, running: bool):
         self.progress_bar.setVisible(running)
+        self._set_empty_busy(running)
+
+    def _set_empty_busy(self, running: bool):
+        """Swap the hero's Run button for an animated busy indicator. The
+        subtitle doubles as the live progress line while running."""
+        self.run_btn_big.setVisible(not running)
+        self._empty_busy.setVisible(running)
+        if running:
+            self._empty_spinner.start()
+            self.empty_subtitle.setText("Starting…")
+        else:
+            self._empty_spinner.stop()
+            self.empty_subtitle.setText(self._empty_subtitle_default)
 
     # ----- Run / worker plumbing -----
 
@@ -276,6 +387,7 @@ class ComparisonWidget(QWidget):
     @Slot(str)
     def _on_progress(self, message: str):
         self.strip_label.setText(message)
+        self.empty_subtitle.setText(message)
         self.progress_updated.emit(message)
 
     @Slot(dict)
@@ -293,7 +405,7 @@ class ComparisonWidget(QWidget):
         self._update_org_button_label()
 
         self._update_summary(rows)
-        self._apply_filter(DEFAULT_FILTER)
+        self._reset_filter()
         self.set_last_run(f"last run {datetime.now():%H:%M}")
         self.stack.setCurrentIndex(PAGE_RESULTS)
 
@@ -318,16 +430,55 @@ class ComparisonWidget(QWidget):
 
     @Slot(str)
     def _on_card_clicked(self, key: str):
-        self._apply_filter(key)
+        """Total clears the selection (show all); the status cards toggle, and
+        the table shows the union of whatever is selected."""
+        self._only_ignored = False
+        if key == "total":
+            self._selected = set()
+        else:
+            self._selected ^= {key}  # toggle membership
+        self._apply_selection()
 
-    def _apply_filter(self, key: str):
-        status, only_ignored, _ = FILTERS[key]
-        self.proxy_model.set_status_filter(status)
-        self.proxy_model.set_only_ignored(only_ignored)
-        self._active_filter = key
-        for card_key, card in self._cards.items():
-            card.set_active(card_key == key)
+    @Slot()
+    def _toggle_ignored_view(self):
+        """Flip the quiet ignored link between the ignored-only view and the
+        previous status selection."""
+        if self._only_ignored:
+            self._only_ignored = False
+        else:
+            self._only_ignored = True
+        self._apply_selection()
+
+    def _reset_filter(self):
+        """Return to the problems-first default view."""
+        self._selected = set(DEFAULT_SELECTION)
+        self._only_ignored = False
+        self._apply_selection()
+
+    def _apply_selection(self):
+        """Push the current selection to the proxy and sync card/link highlights."""
+        statuses = {STATUS_CARD_KEYS[k] for k in self._selected}
+        self.proxy_model.set_status_filter(statuses)
+        self.proxy_model.set_only_ignored(self._only_ignored)
+
+        # Total is "active" when showing everything (no status filter, not ignored).
+        self._cards["total"].set_active(not self._only_ignored and not self._selected)
+        for key in STATUS_CARD_KEYS:
+            self._cards[key].set_active(
+                not self._only_ignored and key in self._selected
+            )
+        self._set_link_active(self.ignored_btn, self._only_ignored)
         self._update_strip()
+
+    @staticmethod
+    def _set_link_active(btn: QToolButton, active: bool):
+        """Toggle a link button's ``active`` property and re-polish so the QSS
+        ``[active="true"]`` rule takes effect."""
+        if btn.property("active") == active:
+            return
+        btn.setProperty("active", active)
+        btn.style().unpolish(btn)
+        btn.style().polish(btn)
 
     @Slot()
     def _open_org_filter(self):
@@ -412,7 +563,7 @@ class ComparisonWidget(QWidget):
         active = [r for r in rows if row_key(r) not in ignored]
 
         counts = {
-            "all": len(active),
+            "total": len(active),
             "ok": sum(1 for r in active if r.status == STATUS_OK),
             "missing_huntress": sum(
                 1 for r in active if r.status == STATUS_MISSING_HUNTRESS
@@ -420,16 +571,40 @@ class ComparisonWidget(QWidget):
             "missing_syncro": sum(
                 1 for r in active if r.status == STATUS_MISSING_SYNCRO
             ),
-            "ignored": len(rows) - len(active),
         }
         for key, card in self._cards.items():
             card.set_count(counts[key])
+        self._update_ignored_toggle(len(rows) - len(active))
+
+    def _update_ignored_toggle(self, count: int):
+        """Refresh the quiet ignored link. Hidden when nothing is ignored; if the
+        ignored view is open when the last ignored row clears, fall back home."""
+        self._ignored_count = count
+        if count == 0:
+            self.ignored_btn.setVisible(False)
+            if self._only_ignored:
+                self._reset_filter()
+            return
+        self.ignored_btn.setVisible(True)
+        self.ignored_btn.setText(f"{count} ignored")
+
+    def _selection_label(self) -> str:
+        if self._only_ignored:
+            return "ignored"
+        if not self._selected:
+            return "all"
+        if self._selected == set(DEFAULT_SELECTION):
+            return "issues"
+        return ", ".join(
+            label for key, label in FILTER_LABELS.items() if key in self._selected
+        )
 
     def _update_strip(self):
         visible = self.proxy_model.rowCount()
         total = self.model.rowCount()
-        label = FILTERS[self._active_filter][2]
-        self.strip_label.setText(f"Showing {visible} of {total} — {label}")
+        self.strip_label.setText(
+            f"Showing {visible} of {total} — {self._selection_label()}"
+        )
 
     def set_last_run(self, text: str):
         self.last_run_label.setText(text)

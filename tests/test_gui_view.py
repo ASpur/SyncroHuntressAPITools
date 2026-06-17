@@ -3,6 +3,7 @@
 import pytest
 
 from const import STATUS_MISSING_HUNTRESS, STATUS_MISSING_SYNCRO, STATUS_OK
+from gui.widgets.comparison_widget import DEFAULT_SELECTION
 from services.comparison import ComparisonRow
 
 
@@ -38,15 +39,20 @@ class TestProxyFilter:
         proxy.setSourceModel(model)
         return model, proxy
 
-    def test_not_ok_hides_ok_rows(self, qapp, rows):
+    def test_union_status_filter(self, qapp, rows):
         _, proxy = self._model(rows)
-        proxy.set_status_filter("Not OK")
+        proxy.set_status_filter({STATUS_MISSING_HUNTRESS, STATUS_MISSING_SYNCRO})
         assert proxy.rowCount() == 2
 
-    def test_exact_status_filter(self, qapp, rows):
+    def test_single_status_filter(self, qapp, rows):
         _, proxy = self._model(rows)
-        proxy.set_status_filter(STATUS_MISSING_SYNCRO)
+        proxy.set_status_filter({STATUS_MISSING_SYNCRO})
         assert proxy.rowCount() == 1
+
+    def test_empty_status_filter_shows_all(self, qapp, rows):
+        _, proxy = self._model(rows)
+        proxy.set_status_filter(set())
+        assert proxy.rowCount() == 4
 
     def test_ignored_only_mode(self, qapp, rows):
         model, proxy = self._model(rows)
@@ -64,52 +70,86 @@ class TestComparisonWidget:
     def test_default_filter_is_problems_first(self, qapp, isolated_settings, rows):
         widget = self._widget(isolated_settings)
         widget._on_result(rows)
-        assert widget._active_filter == "issues"
+        assert widget._selected == set(DEFAULT_SELECTION)
         # Two non-OK rows visible by default.
         assert widget.proxy_model.rowCount() == 2
-        # No stat card is highlighted for the composite "issues" default.
-        assert not any(c.property("active") for c in widget._cards.values())
+        # Both "missing" cards are highlighted; OK and Total are not.
+        assert widget._cards["missing_huntress"].property("active") is True
+        assert widget._cards["missing_syncro"].property("active") is True
+        assert widget._cards["ok"].property("active") is False
+        assert widget._cards["total"].property("active") is False
 
-    def test_card_click_filters_and_highlights(self, qapp, isolated_settings, rows):
+    def test_total_card_clears_selection(self, qapp, isolated_settings, rows):
         widget = self._widget(isolated_settings)
         widget._on_result(rows)
+        widget._cards["total"].clicked.emit("total")
+        assert widget._selected == set()
+        assert widget.proxy_model.rowCount() == 4
+        assert widget._cards["total"].property("active") is True
+
+    def test_status_cards_multi_select(self, qapp, isolated_settings, rows):
+        widget = self._widget(isolated_settings)
+        widget._on_result(rows)
+        widget._cards["total"].clicked.emit("total")  # clear
         widget._cards["ok"].clicked.emit("ok")
-        assert widget._active_filter == "ok"
         assert widget.proxy_model.rowCount() == 2
+        widget._cards["missing_syncro"].clicked.emit("missing_syncro")
+        # OK (2) + Missing in Syncro (1) = 3 rows.
+        assert widget.proxy_model.rowCount() == 3
         assert widget._cards["ok"].property("active") is True
+        assert widget._cards["missing_syncro"].property("active") is True
+        # Clicking an active card toggles it back off.
+        widget._cards["ok"].clicked.emit("ok")
+        assert widget._cards["ok"].property("active") is False
+        assert widget.proxy_model.rowCount() == 1
+
+    def test_ignored_toggle_view(self, qapp, isolated_settings, rows):
+        widget = self._widget(isolated_settings)
+        isolated_settings.add_ignored("bw-rec")
+        widget._on_result(rows)
+        assert widget.ignored_btn.isVisibleTo(widget.ignored_btn.parentWidget())
+        assert widget.ignored_btn.text() == "1 ignored"
+        widget._toggle_ignored_view()
+        assert widget._only_ignored is True
+        assert widget.proxy_model.rowCount() == 1
+        assert widget.ignored_btn.property("active") is True
+        # Toggling again returns to the problems-first default.
+        widget._toggle_ignored_view()
+        assert widget._only_ignored is False
+        assert widget._selected == set(DEFAULT_SELECTION)
 
     def test_stat_card_counts(self, qapp, isolated_settings, rows):
         widget = self._widget(isolated_settings)
         widget._on_result(rows)
-        assert widget._cards["all"]._value.text() == "4"
+        assert widget._cards["total"]._value.text() == "4"
         assert widget._cards["missing_huntress"]._value.text() == "1"
 
 
-class TestSettingsDialog:
+class TestSettingsView:
     def test_save_blocked_when_fields_missing(self, qapp, isolated_settings):
-        from gui.widgets.settings_dialog import SettingsDialog
+        from gui.widgets.settings_view import SettingsView
 
-        dialog = SettingsDialog(isolated_settings)
-        result = {"accepted": False}
-        dialog.accepted.connect(lambda: result.update(accepted=True))
-        dialog._on_save()
-        # isVisibleTo reflects the visibility flag even though the dialog is
+        view = SettingsView(isolated_settings)
+        result = {"saved": False}
+        view.saved.connect(lambda: result.update(saved=True))
+        view._on_save()
+        # isVisibleTo reflects the visibility flag even though the view is
         # never shown in a headless test.
-        assert dialog.error_label.isVisibleTo(dialog)
-        assert dialog.error_label.text()
-        assert result["accepted"] is False
+        assert view.error_label.isVisibleTo(view)
+        assert view.error_label.text()
+        assert result["saved"] is False
 
-    def test_valid_save_persists_and_accepts(self, qapp, isolated_settings):
-        from gui.widgets.settings_dialog import SettingsDialog
+    def test_valid_save_persists_and_emits(self, qapp, isolated_settings):
+        from gui.widgets.settings_view import SettingsView
 
-        dialog = SettingsDialog(isolated_settings)
-        dialog.syncro_subdomain.setText("acme")
-        dialog.syncro_api_key.setText("k1")
-        dialog.huntress_api_key.setText("k2")
-        dialog.huntress_secret.setText("s1")
-        accepted = {"value": False}
-        dialog.accepted.connect(lambda: accepted.update(value=True))
-        dialog._on_save()
-        assert accepted["value"] is True
+        view = SettingsView(isolated_settings)
+        view.syncro_subdomain.setText("acme")
+        view.syncro_api_key.setText("k1")
+        view.huntress_api_key.setText("k2")
+        view.huntress_secret.setText("s1")
+        saved = {"value": False}
+        view.saved.connect(lambda: saved.update(value=True))
+        view._on_save()
+        assert saved["value"] is True
         assert isolated_settings.get("SyncroSubDomain") == "acme"
         assert isolated_settings.validate()[0] is True
