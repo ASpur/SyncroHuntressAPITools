@@ -7,10 +7,11 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
+    QDialogButtonBox,
     QFileDialog,
     QFormLayout,
-    QGroupBox,
     QHBoxLayout,
+    QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
@@ -38,66 +39,62 @@ class ExportDialog(QDialog):
         self.setMinimumWidth(400)
         self._setup_ui()
 
+    @staticmethod
+    def _section_header(text: str) -> QLabel:
+        label = QLabel(text.upper())
+        label.setProperty("role", "sectionHeader")
+        return label
+
     def _setup_ui(self):
         """Setup the UI components."""
         layout = QVBoxLayout(self)
+        layout.setSpacing(12)
 
         # Format selection
-        format_group = QGroupBox("Export Format")
-        format_layout = QFormLayout(format_group)
-
+        layout.addWidget(self._section_header("Export Format"))
+        format_form = QFormLayout()
         self.format_combo = QComboBox()
         self.format_combo.addItems(["CSV", "ASCII Table"])
-        format_layout.addRow("Format:", self.format_combo)
-
-        layout.addWidget(format_group)
+        format_form.addRow("Format:", self.format_combo)
+        layout.addLayout(format_form)
 
         # File path
-        file_group = QGroupBox("Output File")
-        file_layout = QHBoxLayout(file_group)
-
+        layout.addWidget(self._section_header("Output File"))
+        file_row = QHBoxLayout()
         self.file_edit = QLineEdit()
         self.file_edit.setPlaceholderText("Select output file...")
-        file_layout.addWidget(self.file_edit)
-
+        file_row.addWidget(self.file_edit)
         self.browse_btn = QPushButton("Browse...")
         self.browse_btn.clicked.connect(self._browse_file)
-        file_layout.addWidget(self.browse_btn)
-
-        layout.addWidget(file_group)
+        file_row.addWidget(self.browse_btn)
+        layout.addLayout(file_row)
 
         # Options
-        options_group = QGroupBox("Options")
-        options_layout = QVBoxLayout(options_group)
-
+        layout.addWidget(self._section_header("Options"))
         self.only_issues_checkbox = QCheckBox("Export only mismatches (exclude OK)")
-        options_layout.addWidget(self.only_issues_checkbox)
-
-        layout.addWidget(options_group)
+        layout.addWidget(self.only_issues_checkbox)
 
         # Summary
         total = len(self.results)
         issues = sum(1 for r in self.results if r.status != STATUS_OK)
-        self.summary_label = QPushButton(
+        self.summary_label = QLabel(
             f"Ready to export {total} rows ({issues} issues)"
         )
-        self.summary_label.setEnabled(False)
-        self.summary_label.setFlat(True)
+        self.summary_label.setProperty("role", "hint")
         layout.addWidget(self.summary_label)
 
-        # Buttons
-        button_layout = QHBoxLayout()
-        button_layout.addStretch()
-
+        # Buttons — Cancel on left, Export (primary) on right
         self.export_btn = QPushButton("Export")
+        self.export_btn.setProperty("variant", "primary")
         self.export_btn.clicked.connect(self._export)
-        button_layout.addWidget(self.export_btn)
-
         self.cancel_btn = QPushButton("Cancel")
         self.cancel_btn.clicked.connect(self.reject)
-        button_layout.addWidget(self.cancel_btn)
 
-        layout.addLayout(button_layout)
+        button_box = QDialogButtonBox()
+        button_box.addButton(self.cancel_btn, QDialogButtonBox.RejectRole)
+        button_box.addButton(self.export_btn, QDialogButtonBox.AcceptRole)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
 
     @Slot()
     def _browse_file(self):

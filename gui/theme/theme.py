@@ -6,10 +6,12 @@ appearance, emitting `changed` so palette-driven painters (the table model's
 status dots, ignored dimming) can refresh.
 """
 
+import math
 from string import Template
 
-from PySide6.QtCore import QObject, Qt, Signal
-from PySide6.QtGui import QColor, QPainter, QPixmap
+from PySide6.QtCore import QObject, QPointF, QRectF, Qt, Signal
+from PySide6.QtGui import QColor, QPainter, QPen, QPixmap
+from PySide6.QtWidgets import QApplication
 
 from gui.theme.tokens import Palette, palette_for_scheme
 
@@ -22,12 +24,35 @@ QWidget {
     font-size: 13px;
 }
 
+*:focus-visible {
+    outline: 2px solid $accent;
+    outline-offset: 2px;
+}
+QLineEdit:focus-visible {
+    outline: none;
+    border: 1px solid $accent;
+}
+QPushButton:focus-visible {
+    outline: none;
+    border: 2px solid $accent;
+}
+
 QMainWindow, QDialog { background: $bg_primary; }
+
+QMenuBar {
+    background: $bg_primary;
+    color: $text_secondary;
+    border-bottom: 1px solid $border;
+    padding: 2px 4px;
+}
+QMenuBar::item { padding: 4px 8px; border-radius: 4px; }
+QMenuBar::item:selected { background: $hover; color: $text_primary; }
 
 QLabel { background: transparent; }
 QLabel[role="muted"] { color: $text_secondary; }
 QLabel[role="hint"] { color: $text_tertiary; }
 QLabel[role="error"] { color: $status_missing_huntress; }
+QLabel[role="warning"] { color: $status_missing_syncro; }
 QLabel[role="heroTitle"] { font-size: 19px; font-weight: 500; color: $text_primary; }
 QLabel[role="heroGlyph"] { font-size: 24px; color: $text_secondary; }
 
@@ -72,7 +97,7 @@ QPushButton[variant="primary"] {
     border: none;
     font-weight: 500;
 }
-QPushButton[variant="primary"]:hover { background: $accent; color: #ffffff; }
+QPushButton[variant="primary"]:hover { background: $primary_bg_hover; color: #ffffff; }
 QPushButton[variant="primary"]:disabled {
     background: $bg_tertiary;
     color: $text_tertiary;
@@ -95,6 +120,22 @@ QToolButton[variant="link"] {
 }
 QToolButton[variant="link"]:hover { color: $text_secondary; }
 QToolButton[variant="link"][active="true"] { color: $accent; }
+QToolButton[variant="disclosure"] {
+    background: transparent;
+    color: $text_tertiary;
+    border: none;
+    padding: 4px 2px;
+    font-size: 11px;
+    font-weight: 600;
+}
+QToolButton[variant="disclosure"]:hover { color: $text_secondary; }
+QToolButton:checked { background: $bg_tertiary; color: $text_primary; }
+
+QFrame[role="selectionBar"] {
+    background: $bg_secondary;
+    border: 1px solid $border;
+    border-radius: 8px;
+}
 
 QLineEdit {
     background: $bg_primary;
@@ -137,6 +178,11 @@ QLabel[role="sectionHeader"] {
     font-weight: 600;
 }
 
+QFrame[role="separator"] {
+    background: $border;
+    max-height: 1px;
+}
+
 QTableView {
     background: $bg_primary;
     alternate-background-color: $bg_secondary;
@@ -146,7 +192,7 @@ QTableView {
     selection-background-color: $selection_bg;
     selection-color: $text_primary;
 }
-QTableView::item { padding: 4px 6px; }
+QTableView::item { padding: 6px 8px; }
 QHeaderView::section {
     background: $bg_secondary;
     color: $text_tertiary;
@@ -224,6 +270,80 @@ QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
 def qss(palette: Palette) -> str:
     """Render the stylesheet for a palette. Raises if a token is missing."""
     return _QSS_TEMPLATE.substitute(palette)
+
+
+def _device_pixel_ratio() -> float:
+    app = QApplication.instance()
+    return float(app.devicePixelRatio()) if app is not None else 1.0
+
+
+def icon_pixmap(name: str, size: int = 16, token: str = "text_secondary") -> QPixmap:
+    """A small monochrome line icon painted in the active palette's color.
+
+    Icons are drawn as vector strokes (Feather/Lucide style) so they stay crisp
+    at any DPI and re-tint automatically with the theme — the same approach as
+    ``dot_pixmap`` and the app icon, with no bundled assets. Names: ``search``,
+    ``gear``, ``refresh``, ``chevron-down``, ``eye``, ``eye-off``."""
+    dpr = _device_pixel_ratio()
+    pm = QPixmap(round(size * dpr), round(size * dpr))
+    pm.fill(Qt.transparent)
+    pm.setDevicePixelRatio(dpr)
+
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.Antialiasing)
+    color = Theme.instance().color(token)
+    pen = QPen(color, max(1.4, size / 11.0))
+    pen.setCapStyle(Qt.RoundCap)
+    pen.setJoinStyle(Qt.RoundJoin)
+    p.setPen(pen)
+    p.setBrush(Qt.NoBrush)
+    s = float(size)
+
+    if name == "search":
+        r = 0.26 * s
+        cx = cy = 0.42 * s
+        p.drawEllipse(QPointF(cx, cy), r, r)
+        off = r * 0.7071
+        p.drawLine(QPointF(cx + off, cy + off), QPointF(0.82 * s, 0.82 * s))
+    elif name == "refresh":
+        rect = QRectF(0.16 * s, 0.16 * s, 0.68 * s, 0.68 * s)
+        p.drawArc(rect, 70 * 16, 250 * 16)
+        # Arrowhead at the open (leading) end of the arc.
+        ang = math.radians(70)
+        cx = cy = 0.5 * s
+        rad = 0.34 * s
+        tx = cx + rad * math.cos(ang)
+        ty = cy - rad * math.sin(ang)
+        a = 0.14 * s
+        p.drawLine(QPointF(tx, ty), QPointF(tx - a, ty - a * 0.15))
+        p.drawLine(QPointF(tx, ty), QPointF(tx + a * 0.2, ty - a))
+    elif name == "gear":
+        cx = cy = 0.5 * s
+        ring = 0.22 * s
+        p.drawEllipse(QPointF(cx, cy), ring, ring)
+        p.drawEllipse(QPointF(cx, cy), 0.09 * s, 0.09 * s)
+        p.save()
+        p.translate(cx, cy)
+        p.setBrush(color)
+        p.setPen(Qt.NoPen)
+        tooth_w = 0.13 * s
+        for _ in range(8):
+            p.drawRoundedRect(
+                QRectF(-tooth_w / 2, -(ring + 0.13 * s), tooth_w, 0.16 * s), 1.0, 1.0
+            )
+            p.rotate(45)
+        p.restore()
+    elif name == "chevron-down":
+        p.drawLine(QPointF(0.28 * s, 0.40 * s), QPointF(0.5 * s, 0.60 * s))
+        p.drawLine(QPointF(0.5 * s, 0.60 * s), QPointF(0.72 * s, 0.40 * s))
+    elif name in ("eye", "eye-off"):
+        p.drawEllipse(QPointF(0.5 * s, 0.5 * s), 0.32 * s, 0.19 * s)
+        p.drawEllipse(QPointF(0.5 * s, 0.5 * s), 0.085 * s, 0.085 * s)
+        if name == "eye-off":
+            p.drawLine(QPointF(0.20 * s, 0.20 * s), QPointF(0.80 * s, 0.80 * s))
+
+    p.end()
+    return pm
 
 
 def dot_pixmap(token: str, diameter: int = 10) -> QPixmap:

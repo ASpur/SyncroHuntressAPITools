@@ -126,18 +126,30 @@ class TestComparisonWidget:
 
 
 class TestSettingsView:
-    def test_save_blocked_when_fields_missing(self, qapp, isolated_settings):
+    def test_save_warns_when_fields_missing(self, qapp, isolated_settings):
         from gui.widgets.settings_view import SettingsView
 
         view = SettingsView(isolated_settings)
         result = {"saved": False}
         view.saved.connect(lambda: result.update(saved=True))
         view._on_save()
-        # isVisibleTo reflects the visibility flag even though the view is
-        # never shown in a headless test.
-        assert view.error_label.isVisibleTo(view)
-        assert view.error_label.text()
+        # Settings are persisted but saved is NOT emitted (user stays on
+        # the settings page so they can read the warning).
         assert result["saved"] is False
+        assert view.warning_label.isVisibleTo(view)
+        assert view.warning_label.text()
+        assert isolated_settings.get("UseFakeData") is False
+
+    def test_save_no_warning_when_fake_data_enabled(self, qapp, isolated_settings):
+        from gui.widgets.settings_view import SettingsView
+
+        view = SettingsView(isolated_settings)
+        view.fake_data_checkbox.setChecked(True)
+        result = {"saved": False}
+        view.saved.connect(lambda: result.update(saved=True))
+        view._on_save()
+        assert result["saved"] is True
+        assert not view.warning_label.isVisibleTo(view)
 
     def test_valid_save_persists_and_emits(self, qapp, isolated_settings):
         from gui.widgets.settings_view import SettingsView

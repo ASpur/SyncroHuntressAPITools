@@ -22,6 +22,10 @@ class StatCard(QFrame):
         self._dot_token = dot_token
         self.setCursor(Qt.PointingHandCursor)
         self.setProperty("active", False)
+        self.setAccessibleName(label)
+        self.setAccessibleDescription(
+            f"Filter results by {label.lower()} status. Click to toggle."
+        )
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 9, 12, 9)
@@ -48,6 +52,11 @@ class StatCard(QFrame):
         font.setWeight(font.Weight.Medium)
         self._value.setFont(font)
         layout.addWidget(self._value)
+
+        if key == "total":
+            self.setToolTip("Click to show all results")
+        else:
+            self.setToolTip(f"Click to filter by {label.lower()}")
 
         Theme.instance().changed.connect(self._refresh_dot)
 

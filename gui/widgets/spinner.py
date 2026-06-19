@@ -19,6 +19,7 @@ class Spinner(QWidget):
     def __init__(self, diameter: int = 16, parent=None):
         super().__init__(parent)
         self.setFixedSize(diameter, diameter)
+        self.setAccessibleName("Loading indicator")
         self._angle = 0
         self._timer = QTimer(self)
         self._timer.setInterval(80)

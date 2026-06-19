@@ -33,6 +33,7 @@ LIGHT: Palette = {
     # Primary (high-contrast) button.
     "primary_bg": "#1b1b19",
     "primary_fg": "#ffffff",
+    "primary_bg_hover": "#141412",
 }
 
 DARK: Palette = {
@@ -53,6 +54,7 @@ DARK: Palette = {
     "ignored_fg": "#6f6f68",
     "primary_bg": "#ececea",
     "primary_fg": "#1c1c1b",
+    "primary_bg_hover": "#d8d8d6",
 }
 
 

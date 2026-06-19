@@ -3,7 +3,13 @@ views as stacked pages, plus the (separate) export and raw-data dialogs."""
 
 from PySide6.QtCore import Slot
 from PySide6.QtGui import QAction, QKeySequence
-from PySide6.QtWidgets import QMainWindow, QMessageBox, QStackedWidget
+from PySide6.QtWidgets import (
+    QMainWindow,
+    QMenuBar,
+    QMessageBox,
+    QProgressBar,
+    QStackedWidget,
+)
 
 from gui.models.settings_model import SettingsModel
 from gui.widgets.comparison_widget import ComparisonWidget
@@ -38,6 +44,17 @@ class MainWindow(QMainWindow):
 
         self._connect_signals()
         self._setup_shortcuts()
+        self._setup_status_bar()
+
+    def _setup_status_bar(self):
+        sb = self.statusBar()
+        self._status_progress = QProgressBar()
+        self._status_progress.setRange(0, 0)
+        self._status_progress.setMaximumWidth(140)
+        self._status_progress.setTextVisible(False)
+        self._status_progress.setVisible(False)
+        sb.addPermanentWidget(self._status_progress)
+        sb.showMessage("Ready")
 
     def _connect_signals(self):
         cw = self.comparison_widget
@@ -45,6 +62,9 @@ class MainWindow(QMainWindow):
         cw.settings_requested.connect(self._show_settings)
         cw.export_requested.connect(self._show_export_dialog)
         cw.settings_invalid.connect(self._on_settings_invalid)
+        cw.comparison_started.connect(self._on_comparison_started)
+        cw.comparison_finished.connect(self._on_comparison_finished)
+        cw.progress_updated.connect(self._on_progress_updated)
 
         sv = self.settings_view
         sv.saved.connect(self._on_settings_saved)
@@ -62,23 +82,48 @@ class MainWindow(QMainWindow):
         self._show_settings()
 
     def _setup_shortcuts(self):
-        export_action = QAction("Export", self)
+        menu_bar = self.menuBar()
+        menu_bar.setNativeMenuBar(False)
+
+        file_menu = menu_bar.addMenu("&File")
+        export_action = QAction("&Export", self)
         export_action.setShortcut(QKeySequence("Ctrl+E"))
         export_action.triggered.connect(self._show_export_dialog)
-        self.addAction(export_action)
+        file_menu.addAction(export_action)
 
-        settings_action = QAction("Settings", self)
-        settings_action.setShortcut(QKeySequence("Ctrl+,"))
-        settings_action.triggered.connect(self._show_settings)
-        self.addAction(settings_action)
+        file_menu.addSeparator()
 
-        quit_action = QAction("Quit", self)
+        quit_action = QAction("&Quit", self)
         quit_action.setShortcut(QKeySequence("Ctrl+Q"))
         quit_action.triggered.connect(self.close)
-        self.addAction(quit_action)
+        file_menu.addAction(quit_action)
+
+        edit_menu = menu_bar.addMenu("&Edit")
+        settings_action = QAction("&Settings", self)
+        settings_action.setShortcut(QKeySequence("Ctrl+,"))
+        settings_action.triggered.connect(self._show_settings)
+        edit_menu.addAction(settings_action)
+
+        help_menu = menu_bar.addMenu("&Help")
+        about_action = QAction("&About", self)
+        about_action.triggered.connect(self._show_about)
+        help_menu.addAction(about_action)
 
     @Slot()
     def _show_settings(self):
+        if (
+            self.stack.currentIndex() == PAGE_SETTINGS
+            and self.settings_view._dirty
+        ):
+            answer = QMessageBox.question(
+                self,
+                "Discard changes?",
+                "You have unsaved changes. Discard them?",
+                QMessageBox.Discard | QMessageBox.Cancel,
+                QMessageBox.Cancel,
+            )
+            if answer != QMessageBox.Discard:
+                return
         self.settings_view.load_values()
         self.stack.setCurrentIndex(PAGE_SETTINGS)
 
@@ -117,3 +162,26 @@ class MainWindow(QMainWindow):
     def _show_debug_dialog(self):
         dialog = DebugDialog(self.comparison_widget.get_raw_data(), self)
         dialog.exec()
+
+    @Slot()
+    def _show_about(self):
+        QMessageBox.about(
+            self,
+            "About",
+            "Syncro Huntress Comparison Tool\n\n"
+            "Compare Syncro assets against Huntress agents to find gaps.",
+        )
+
+    @Slot()
+    def _on_comparison_started(self):
+        self._status_progress.setVisible(True)
+        self.statusBar().showMessage("Running comparison…")
+
+    @Slot()
+    def _on_comparison_finished(self):
+        self._status_progress.setVisible(False)
+        self.statusBar().showMessage("Ready", 5000)
+
+    @Slot(str)
+    def _on_progress_updated(self, message: str):
+        self.statusBar().showMessage(message)

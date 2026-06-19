@@ -22,6 +22,7 @@ DEFAULT_SETTINGS = {
     "HuntressAPIKey": "",
     "HuntressSecretKey": "",
     "Debug": False,
+    "UseFakeData": False,
     # Normalized (NetBIOS-truncated, lowercased) hostnames to treat as ignored.
     "IgnoredAssets": [],
     # Organization (Syncro customer) names to hide from results.

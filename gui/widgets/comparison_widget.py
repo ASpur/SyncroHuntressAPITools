@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 from PySide6.QtCore import Qt, Signal, Slot
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -27,7 +28,7 @@ from gui.models.comparison_model import (
     row_key,
 )
 from gui.models.settings_model import SettingsModel
-from gui.theme.theme import Theme, dot_pixmap
+from gui.theme.theme import Theme, dot_pixmap, icon_pixmap
 from gui.widgets.org_filter_dialog import OrgFilterDialog
 from gui.widgets.spinner import Spinner
 from gui.widgets.stat_card import StatCard
@@ -82,7 +83,9 @@ class ComparisonWidget(QWidget):
         self._selected: set = set(DEFAULT_SELECTION)
         self._only_ignored = False
         self._ignored_count = 0
+        self._last_run_text = ""
         self._setup_ui()
+        Theme.instance().changed.connect(self._refresh_icons)
 
     def _setup_ui(self):
         outer = QVBoxLayout(self)
@@ -201,8 +204,14 @@ class ComparisonWidget(QWidget):
 
     @Slot()
     def _refresh_connection_status(self):
-        """Repaint both pills from current credentials. Green dot = configured,
+        """Repaint both pills from current credentials or fake-data mode.
+        Blue dot = debug/fake-data mode, green dot = configured,
         amber dot = needs API keys (mirrors the table's status-dot scheme)."""
+        if self.settings_model.get("UseFakeData", False):
+            self._set_pill_debug(self._syncro_pill, "Syncro")
+            self._set_pill_debug(self._huntress_pill, "Huntress")
+            return
+
         s = self.settings_model
         syncro_ok = bool(
             (s.get("SyncroAPIKey") or "").strip()
@@ -216,11 +225,20 @@ class ComparisonWidget(QWidget):
         self._set_pill(self._huntress_pill, "Huntress", huntress_ok)
 
     @staticmethod
+    def _set_pill_debug(pill: tuple, name: str):
+        frame, dot, text = pill
+        dot.setPixmap(dot_pixmap("accent"))
+        text.setText(f"{name} — debug mode")
+        frame.setAccessibleName(f"{name} connection: debug mode")
+
+    @staticmethod
     def _set_pill(pill: tuple, name: str, ok: bool):
-        _, dot, text = pill
+        frame, dot, text = pill
         token = "status_ok" if ok else "status_missing_syncro"
         dot.setPixmap(dot_pixmap(token))
+        status = "connected" if ok else "not configured"
         text.setText(f"{name} connected" if ok else f"{name} — add API keys")
+        frame.setAccessibleName(f"{name} connection: {status}")
 
     # ----- Results state -----
 
@@ -228,51 +246,21 @@ class ComparisonWidget(QWidget):
         page = QWidget()
         layout = QVBoxLayout(page)
 
-        layout.addLayout(self._build_top_bar())
-        layout.addLayout(self._build_stat_cards())
+        layout.addLayout(self._build_header_row())
+        layout.addLayout(self._build_search_row())
+        layout.addWidget(self._build_selection_bar())
         layout.addWidget(self._build_table())
         layout.addLayout(self._build_status_strip())
+        self._refresh_icons()
         return page
 
-    def _build_top_bar(self) -> QHBoxLayout:
-        bar = QHBoxLayout()
-
-        title = QLabel("Syncro · Huntress")
-        bar.addWidget(title)
-        self.last_run_label = QLabel("")
-        self.last_run_label.setProperty("role", "hint")
-        bar.addWidget(self.last_run_label)
-
-        bar.addStretch()
-
-        self.search_edit = QLineEdit()
-        self.search_edit.setPlaceholderText("Search…")
-        self.search_edit.setClearButtonEnabled(True)
-        self.search_edit.setMaximumWidth(220)
-        self.search_edit.textChanged.connect(self._on_search_changed)
-        bar.addWidget(self.search_edit)
-
-        self.org_btn = QToolButton()
-        self.org_btn.setText("All orgs")
-        self.org_btn.setToolTip("Choose which organizations are shown")
-        self.org_btn.clicked.connect(self._open_org_filter)
-        bar.addWidget(self.org_btn)
-
-        gear_btn = QToolButton()
-        gear_btn.setText("⚙")
-        gear_btn.setToolTip("Settings")
-        gear_btn.clicked.connect(self.settings_requested)
-        bar.addWidget(gear_btn)
-
-        self.rerun_btn = QPushButton("Rerun")
-        self.rerun_btn.setProperty("variant", "primary")
-        self.rerun_btn.clicked.connect(self.run_comparison)
-        bar.addWidget(self.rerun_btn)
-
-        return bar
-
-    def _build_stat_cards(self) -> QHBoxLayout:
+    def _build_header_row(self) -> QHBoxLayout:
+        """The stat-card filters are the primary control and take the width;
+        the quiet secondary actions (org filter, settings, rerun) sit to the
+        right with a clear gutter so the hierarchy reads at a glance."""
         row = QHBoxLayout()
+        row.setSpacing(8)
+
         specs = [
             ("total", "Total", None),
             ("ok", "OK", "status_ok"),
@@ -283,8 +271,58 @@ class ComparisonWidget(QWidget):
             card = StatCard(key, label, dot)
             card.clicked.connect(self._on_card_clicked)
             self._cards[key] = card
-            row.addWidget(card)
+            row.addWidget(card, 1)  # cards share the width; controls stay fixed
+
+        row.addSpacing(16)
+
+        self.org_btn = QToolButton()
+        self.org_btn.setText("All orgs")
+        self.org_btn.setToolTip("Choose which organizations are shown")
+        self.org_btn.clicked.connect(self._open_org_filter)
+        row.addWidget(self.org_btn)
+
+        self.gear_btn = QToolButton()
+        self.gear_btn.setToolTip("Settings")
+        self.gear_btn.clicked.connect(self.settings_requested)
+        row.addWidget(self.gear_btn)
+
+        self.rerun_btn = QPushButton("Rerun")
+        self.rerun_btn.setToolTip("Run the comparison again")
+        self.rerun_btn.clicked.connect(self.run_comparison)
+        row.addWidget(self.rerun_btn)
+
         return row
+
+    def _build_search_row(self) -> QHBoxLayout:
+        """A quiet magnifier pinned to the table's top-right corner. Clicking it
+        reveals a slim search field; clicking again hides and clears it."""
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.addStretch()
+
+        self.search_edit = QLineEdit()
+        self.search_edit.setPlaceholderText("Search assets…")
+        self.search_edit.setClearButtonEnabled(True)
+        self.search_edit.setFixedWidth(240)
+        self.search_edit.setVisible(False)
+        self.search_edit.textChanged.connect(self._on_search_changed)
+        row.addWidget(self.search_edit)
+
+        self.search_btn = QToolButton()
+        self.search_btn.setToolTip("Search assets")
+        self.search_btn.setCheckable(True)
+        self.search_btn.clicked.connect(self._toggle_search)
+        row.addWidget(self.search_btn)
+        return row
+
+    @Slot()
+    def _toggle_search(self):
+        show = self.search_btn.isChecked()
+        self.search_edit.setVisible(show)
+        if show:
+            self.search_edit.setFocus()
+        else:
+            self.search_edit.clear()  # also clears the proxy filter via textChanged
 
     def _build_table(self) -> QTableView:
         self.model = ComparisonTableModel()
@@ -306,7 +344,92 @@ class ComparisonWidget(QWidget):
         header.setSectionResizeMode(1, QHeaderView.Stretch)  # Syncro
         header.setSectionResizeMode(2, QHeaderView.Stretch)  # Huntress
         header.setSectionResizeMode(3, QHeaderView.ResizeToContents)  # Status
+
+        self._empty_overlay = QLabel("No rows match the current filters", self.table_view.viewport())
+        self._empty_overlay.setProperty("role", "hint")
+        self._empty_overlay.setAlignment(Qt.AlignCenter)
+        self._empty_overlay.setVisible(False)
+
+        self.table_view.selectionModel().selectionChanged.connect(
+            self._on_selection_changed
+        )
+
         return self.table_view
+
+    # ----- Selection action bar -----
+
+    def _build_selection_bar(self) -> QWidget:
+        """A contextual bar that slides in only when rows are selected, offering
+        a bulk ignore/restore. Hidden otherwise, so there is no idle chrome."""
+        bar = QFrame()
+        bar.setProperty("role", "selectionBar")
+        bar.setVisible(False)
+        row = QHBoxLayout(bar)
+        row.setContentsMargins(12, 6, 8, 6)
+
+        self.selection_label = QLabel("")
+        self.selection_label.setProperty("role", "muted")
+        row.addWidget(self.selection_label)
+        row.addStretch()
+
+        self.bulk_ignore_btn = QPushButton("Ignore")
+        self.bulk_ignore_btn.clicked.connect(self._on_bulk_ignore)
+        row.addWidget(self.bulk_ignore_btn)
+
+        self.selection_bar = bar
+        return bar
+
+    def _selected_source_rows(self) -> List[int]:
+        return [
+            self.proxy_model.mapToSource(idx).row()
+            for idx in self.table_view.selectionModel().selectedRows()
+        ]
+
+    @Slot()
+    def _on_selection_changed(self):
+        """Show/refresh the action bar for the current selection. When every
+        selected row is already ignored the action flips to Restore."""
+        rows = self._selected_source_rows()
+        if not rows:
+            self.selection_bar.setVisible(False)
+            return
+
+        all_ignored = all(self.model.is_source_row_ignored(r) for r in rows)
+        self.selection_label.setText(f"{len(rows)} selected")
+        self.bulk_ignore_btn.setText("Restore" if all_ignored else "Ignore")
+        self.bulk_ignore_btn.setIcon(
+            QIcon(icon_pixmap("eye" if all_ignored else "eye-off"))
+        )
+        self.selection_bar.setVisible(True)
+
+    @Slot()
+    def _on_bulk_ignore(self):
+        """Ignore every not-yet-ignored selected row; or, if all are already
+        ignored, restore them. Keys are snapshotted first because toggling
+        re-runs the filter and can drop rows out from under the selection."""
+        rows = self._selected_source_rows()
+        targets = []
+        for r in rows:
+            key = self.model.key_for_source_row(r)
+            if key:
+                targets.append((key, self.model.is_source_row_ignored(r)))
+        if not targets:
+            return
+
+        all_ignored = all(ignored for _, ignored in targets)
+        for key, ignored in targets:
+            if all_ignored:
+                self._toggle_ignore(key, False)
+            elif not ignored:
+                self._toggle_ignore(key, True)
+        self.table_view.clearSelection()
+
+    def _refresh_icons(self):
+        """(Re)paint the toolbar icons in the active palette. Called on build and
+        whenever the OS theme flips."""
+        self.search_btn.setIcon(QIcon(icon_pixmap("search")))
+        self.gear_btn.setIcon(QIcon(icon_pixmap("gear")))
+        self.rerun_btn.setIcon(QIcon(icon_pixmap("refresh")))
 
     def _build_status_strip(self) -> QHBoxLayout:
         strip = QHBoxLayout()
@@ -365,10 +488,12 @@ class ComparisonWidget(QWidget):
         if self._worker is not None and self._worker.isRunning():
             return
 
-        is_valid, errors = self.settings_model.validate()
-        if not is_valid:
-            self.settings_invalid.emit(errors)
-            return
+        use_fake = self.settings_model.get("UseFakeData", False)
+        if not use_fake:
+            is_valid, errors = self.settings_model.validate()
+            if not is_valid:
+                self.settings_invalid.emit(errors)
+                return
 
         self._set_run_enabled(False)
         self._set_running(True)
@@ -602,12 +727,23 @@ class ComparisonWidget(QWidget):
     def _update_strip(self):
         visible = self.proxy_model.rowCount()
         total = self.model.rowCount()
-        self.strip_label.setText(
-            f"Showing {visible} of {total} — {self._selection_label()}"
-        )
+        text = f"Showing {visible} of {total} — {self._selection_label()}"
+        if self._last_run_text:
+            text += f" · {self._last_run_text}"
+        self.strip_label.setText(text)
+        self._sync_empty_overlay()
+
+    def _sync_empty_overlay(self):
+        """Show the empty overlay when filters hide all rows but data exists."""
+        filtered_out = self.proxy_model.rowCount() == 0 and self.model.rowCount() > 0
+        self._empty_overlay.setVisible(filtered_out)
+        if filtered_out:
+            vp = self.table_view.viewport()
+            self._empty_overlay.resize(vp.size())
 
     def set_last_run(self, text: str):
-        self.last_run_label.setText(text)
+        self._last_run_text = text
+        self._update_strip()
 
     # ----- Public API used by MainWindow -----
 
